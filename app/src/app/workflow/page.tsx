@@ -85,6 +85,7 @@ export default function WorkflowPage() {
           provider: selectedProvider,
           model: PROVIDER_CONFIGS[selectedProvider].model,
           prompt,
+          type: 'json',
         }),
       });
 
@@ -129,6 +130,35 @@ export default function WorkflowPage() {
             parsed = JSON.parse(rawJsonMatch[0]);
           } catch (e) {
             console.log('Raw JSON parse failed:', e);
+          }
+        }
+      }
+
+      // Try 4: Direct JSON parse (for Ollama json mode)
+      if (!parsed) {
+        try {
+          const directParsed = JSON.parse(response);
+          if (directParsed.ideas && Array.isArray(directParsed.ideas)) {
+            parsed = directParsed;
+          } else if (Array.isArray(directParsed)) {
+            parsed = { ideas: directParsed };
+          }
+        } catch (e) {
+          console.log('Direct JSON parse failed:', e);
+        }
+      }
+
+      // Try 5: Find any JSON array in the response
+      if (!parsed) {
+        const arrayMatch = response.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const arr = JSON.parse(arrayMatch[0]);
+            if (Array.isArray(arr) && arr.length > 0) {
+              parsed = { ideas: arr };
+            }
+          } catch (e) {
+            console.log('Array JSON parse failed:', e);
           }
         }
       }

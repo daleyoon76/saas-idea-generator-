@@ -5,13 +5,14 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { provider = 'ollama', model, prompt } = body;
+    const { provider = 'ollama', model, prompt, type } = body;
+    const jsonMode = type === 'json';
 
     let response: string;
 
     switch (provider) {
       case 'ollama':
-        response = await generateWithOllama(model || 'gemma2:9b', prompt);
+        response = await generateWithOllama(model || 'gemma2:9b', prompt, jsonMode);
         break;
       case 'claude':
         response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt);
@@ -36,11 +37,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function generateWithOllama(model: string, prompt: string): Promise<string> {
+async function generateWithOllama(model: string, prompt: string, jsonMode: boolean = false): Promise<string> {
+  const body: Record<string, unknown> = { model, prompt, stream: false };
+  if (jsonMode) {
+    body.format = 'json';
+  }
   const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt, stream: false }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`Ollama 오류: ${response.statusText}`);
   const data = await response.json();
