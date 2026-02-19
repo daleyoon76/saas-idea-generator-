@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Idea, BusinessPlan, WorkflowStep } from '@/lib/types';
+import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
 import { createIdeaGenerationPrompt, createBusinessPlanPrompt, SearchResult } from '@/lib/prompts';
 
 export default function WorkflowPage() {
@@ -13,23 +13,38 @@ export default function WorkflowPage() {
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
+  const [availableProviders, setAvailableProviders] = useState<Record<AIProvider, boolean | null>>({
+    ollama: null,
+    claude: null,
+    gemini: null,
+    openai: null,
+  });
   const [rawResponse, setRawResponse] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('');
 
   useEffect(() => {
-    checkOllamaConnection();
+    checkProviders();
   }, []);
 
-  async function checkOllamaConnection() {
+  async function checkProviders() {
     try {
-      const res = await fetch('/api/ollama');
+      const res = await fetch('/api/providers');
       const data = await res.json();
-      setOllamaConnected(data.connected);
+      setAvailableProviders({
+        ollama: data.ollama ?? false,
+        claude: data.claude ?? false,
+        gemini: data.gemini ?? false,
+        openai: data.openai ?? false,
+      });
     } catch {
-      setOllamaConnected(false);
+      setAvailableProviders({ ollama: false, claude: false, gemini: false, openai: false });
     }
+  }
+
+  function isProviderReady(): boolean {
+    return availableProviders[selectedProvider] === true;
   }
 
   async function generateIdeas() {
@@ -63,10 +78,14 @@ export default function WorkflowPage() {
       setLoadingMessage('AI가 아이디어를 분석하고 있습니다...');
       const prompt = createIdeaGenerationPrompt(keyword || undefined, searchData);
 
-      const res = await fetch('/api/ollama', {
+      const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: PROVIDER_CONFIGS[selectedProvider].model,
+          prompt,
+        }),
       });
 
       if (!res.ok) {
@@ -198,10 +217,14 @@ export default function WorkflowPage() {
         setLoadingMessage(`"${idea.name}" 사업기획서 작성 중...`);
         const prompt = createBusinessPlanPrompt(idea, planSearchResults);
 
-        const res = await fetch('/api/ollama', {
+        const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({
+            provider: selectedProvider,
+            model: PROVIDER_CONFIGS[selectedProvider].model,
+            prompt,
+          }),
         });
 
         if (!res.ok) {
@@ -270,15 +293,19 @@ export default function WorkflowPage() {
           </p>
         </div>
 
-        {/* Ollama Status */}
+        {/* Provider Status */}
         <div className="mb-8 text-center">
-          {ollamaConnected === null ? (
-            <span className="text-gray-700">Ollama 연결 확인 중...</span>
-          ) : ollamaConnected ? (
-            <span className="text-green-600">● Ollama 연결됨</span>
+          {availableProviders[selectedProvider] === null ? (
+            <span className="text-gray-500 text-sm">AI 모델 상태 확인 중...</span>
+          ) : availableProviders[selectedProvider] ? (
+            <span className="text-green-600 text-sm">
+              ● {PROVIDER_CONFIGS[selectedProvider].label} 사용 가능
+            </span>
           ) : (
-            <span className="text-red-600">
-              ● Ollama 연결 안됨 - `ollama serve` 실행 필요
+            <span className="text-red-500 text-sm">
+              ● {PROVIDER_CONFIGS[selectedProvider].label} 사용 불가
+              {selectedProvider === 'ollama' && ' — ollama serve 실행 필요'}
+              {selectedProvider !== 'ollama' && ' — .env.local에 API 키 추가 필요'}
             </span>
           )}
         </div>
@@ -334,6 +361,43 @@ export default function WorkflowPage() {
         {/* Step: Keyword Input */}
         {step === 'keyword' && (
           <div className="bg-white rounded-lg shadow p-8">
+            {/* AI Model Selector */}
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                사용할 AI 모델 선택
+              </h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(Object.keys(PROVIDER_CONFIGS) as AIProvider[]).map((provider) => {
+                  const cfg = PROVIDER_CONFIGS[provider];
+                  const available = availableProviders[provider];
+                  const isSelected = selectedProvider === provider;
+                  return (
+                    <button
+                      key={provider}
+                      onClick={() => setSelectedProvider(provider)}
+                      className={`relative p-3 rounded-lg border-2 text-left transition ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium text-sm text-gray-900">{cfg.label}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{cfg.description}</div>
+                      <div className="mt-1.5">
+                        {available === null ? (
+                          <span className="text-xs text-gray-400">확인 중...</span>
+                        ) : available ? (
+                          <span className="text-xs text-green-600">● 사용 가능</span>
+                        ) : (
+                          <span className="text-xs text-red-400">● 미설정</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <h2 className="text-xl font-semibold mb-4 text-gray-900">
               서비스 아이템을 브레인스토밍해보려고 합니다
             </h2>
@@ -345,7 +409,7 @@ export default function WorkflowPage() {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && ollamaConnected) {
+                if (e.key === 'Enter' && isProviderReady()) {
                   generateIdeas();
                 }
               }}
@@ -355,7 +419,7 @@ export default function WorkflowPage() {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={generateIdeas}
-                disabled={!ollamaConnected}
+                disabled={!isProviderReady()}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
               >
                 아이디어 발굴 시작

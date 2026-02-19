@@ -29,15 +29,16 @@
 
 ### Phase 2: AI 모델 선택 기능
 
-- [ ] **AI 모델 선택 UI 추가**
-  - 기본값: Ollama (llama3.2)
-  - 옵션: Gemini, OpenAI, Claude 등
+- [x] **AI 모델 선택 UI 추가**
+  - 기본값: Ollama (gemma2:9b)
+  - 옵션: Claude Sonnet, Gemini Flash, GPT-4o
+  - 각 provider 사용 가능 여부 실시간 표시
 
-- [ ] **Google Gemini API 연동**
-  - 기획팀장 단계: Gemini Pro
-  - 사업전략기획자 단계: Gemini Deep Research
+- [x] **Google Gemini API 연동** (gemini-2.0-flash)
 
-- [ ] **OpenAI API 연동 (선택사항)**
+- [x] **Claude API 연동** (claude-sonnet-4-6)
+
+- [x] **OpenAI API 연동** (gpt-4o)
 
 ### Phase 3: Google API 연동
 
