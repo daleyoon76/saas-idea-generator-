@@ -42,9 +42,11 @@ keyword → generating-ideas → select-ideas → generating-plan → view-plan
 
 `lib/prompts.ts`에 두 개의 프롬프트 생성 함수가 있다:
 - `createIdeaGenerationPrompt()` — JSON 형식으로 아이디어 3개 요청. 응답 파싱 로직이 workflow 페이지에 내장됨(```json 블록 → ``` 블록 → raw JSON 순서로 시도)
-- `createBusinessPlanPrompt()` — 마크다운 형식의 8개 섹션 기획서 요청
+- `createBusinessPlanPrompt()` — 마크다운 형식의 13개 섹션 기획서 요청
 
 두 함수 모두 DuckDuckGo 검색 결과(`SearchResult[]`)를 받아 프롬프트에 컨텍스트로 삽입한다. 검색은 `/api/search`가 담당하며, 실패해도 AI 생성은 계속 진행된다.
+
+알고리즘 상세 내용은 `docs/algorithm.md` 참고.
 
 ### 기본 모델
 
@@ -72,6 +74,34 @@ Ollama는 별도 API 키 없이 `ollama serve` 실행만 필요. 기본 모델�
 
 ## 남은 작업 (to-do.md 참고)
 
+- **바로 다음**: 아이디어 생성 강화 (검색엔진 Google 전환, 쿼리 개선) + 사업기획서 에이전트 팀 구조 검토
 - Phase 3: Google OAuth + Sheets/Docs 연동
 - Phase 4: 슬라이드 생성 + Google Slides 연동
 - Phase 5: 에러 핸들링 강화, 마크다운 렌더링 개선
+
+## 설계 방향 (2025-02-20 결정)
+
+### 에이전트 팀 구조에 대해
+"에이전트 팀"은 Claude Code의 내부 에이전트가 아니라, **Next.js API 라우트 안에서 LLM을 역할별로 순차 호출하는 체인**으로 구현한다. 서버에 배포되어 사용자 요청마다 실행되는 일반 코드다.
+
+예시 흐름:
+```
+사용자 요청
+  → [에이전트 1] 시장조사 LLM 호출
+  → [에이전트 2] 경쟁분석 LLM 호출 (에이전트 1 결과 포함)
+  → [에이전트 3] 재무모델 LLM 호출 (앞 결과 포함)
+  → 최종 기획서 조합 → 반환
+```
+
+### 문서 관리 규칙
+- 알고리즘이 변경되면 반드시 `docs/algorithm.md`도 업데이트한다.
+- `plan.md`는 목표 설계 문서다. 개발 방향이 바뀌거나 단계가 완료되면 반드시 업데이트한다.
+- `CLAUDE.md`는 현재 구현 상태를 반영한다. `plan.md`의 목표와 혼동하지 않는다.
+
+### 문서별 역할
+| 파일 | 역할 |
+|------|------|
+| `plan.md` | 목표 설계 — 단계별 기획 의도, 구현 목표. 방향 변경 시 업데이트 |
+| `CLAUDE.md` | 현재 상태 — 실제 구현된 아키텍처, 개발 규칙 |
+| `docs/algorithm.md` | 알고리즘 상세 — 프롬프트/검색 로직 구체 내용 |
+| `to-do.md` | 작업 목록 — 완료/미완료 항목 추적 |
