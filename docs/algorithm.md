@@ -25,9 +25,18 @@
 ```
 한국어로만 답변하세요.
 
+## 아이디어 발굴 기준
+[IDEA_DISCOVERY_CRITERIA — criteria.md 기반]
+- 시장 환경 (2026년 SaaS/Agent 트렌드)
+- 유망 유형 3가지:
+    유형1. 초개인화 웰니스 에이전트 (B2C)
+    유형2. 버티컬 B2B 에이전트
+    유형3. AI QA·디버깅 도구
+- 선정 원칙: 명확한 문제 해결 · 충분한 시장 규모 · MVP 빠른 구현
+
 [검색 결과 컨텍스트 - 제목/URL/내용 최대 5개]
 
-"{키워드}" 관련 SaaS 아이디어 3개를 아래 JSON 형식으로 출력하세요.
+위 발굴 기준을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를 JSON으로 출력하세요.
 
 {
   "ideas": [
@@ -47,6 +56,8 @@
   ]
 }
 ```
+
+> `IDEA_DISCOVERY_CRITERIA` 출처: `app/src/assets/criteria.md` (`바이브코딩 SaaS_Agent 아이템 발굴 기준.docx`)
 
 ### 1-3. JSON 파싱 (응답 후처리)
 
