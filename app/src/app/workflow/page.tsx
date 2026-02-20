@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
 import { createIdeaGenerationPrompt, createBusinessPlanPrompt, SearchResult } from '@/lib/prompts';
 
@@ -289,12 +292,49 @@ export default function WorkflowPage() {
     );
   }
 
-  function downloadPlan(plan: BusinessPlan) {
-    const blob = new Blob([plan.content], { type: 'text/markdown' });
+  function parseInlineText(text: string): TextRun[] {
+    return text.split(/(\*\*[^*]+\*\*)/).map((part) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return new TextRun({ text: part.slice(2, -2), bold: true });
+      }
+      return new TextRun({ text: part });
+    });
+  }
+
+  async function downloadPlan(plan: BusinessPlan) {
+    const lines = plan.content.split('\n');
+    const children: Paragraph[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_1 }));
+      } else if (line.startsWith('### ')) {
+        children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_2 }));
+      } else if (line.startsWith('#### ')) {
+        children.push(new Paragraph({ text: line.slice(5), heading: HeadingLevel.HEADING_3 }));
+      } else if (/^[-*] /.test(line)) {
+        children.push(new Paragraph({ children: parseInlineText(line.slice(2)), bullet: { level: 0 } }));
+      } else if (/^\d+\. /.test(line)) {
+        children.push(new Paragraph({ children: parseInlineText(line.replace(/^\d+\. /, '')), numbering: { reference: 'default-numbering', level: 0 } }));
+      } else if (line.trim() === '') {
+        children.push(new Paragraph({ text: '' }));
+      } else {
+        children.push(new Paragraph({ children: parseInlineText(line) }));
+      }
+    }
+
+    const doc = new Document({
+      numbering: {
+        config: [{ reference: 'default-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'left' }] }],
+      },
+      sections: [{ children }],
+    });
+
+    const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `사업기획안_${plan.ideaName}.md`;
+    a.download = `사업기획안_${plan.ideaName}.docx`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -638,10 +678,44 @@ export default function WorkflowPage() {
               <h2 className="text-2xl font-bold mb-4">
                 {businessPlans[currentPlanIndex].ideaName}
               </h2>
-              <div className="prose max-w-none mb-6">
-                <pre className="whitespace-pre-wrap bg-gray-50 p-6 rounded-lg text-sm text-gray-900 leading-relaxed">
+              <div className="mb-6">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h2: ({ children }) => (
+                      <div className="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
+                        {children}
+                      </div>
+                    ),
+                    h3: ({ children }) => (
+                      <div className="bg-blue-50 text-blue-800 px-4 py-2 border-l-4 border-blue-500 font-semibold text-base mt-5 mb-2">
+                        {children}
+                      </div>
+                    ),
+                    h4: ({ children }) => (
+                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
+                        {children}
+                      </div>
+                    ),
+                    p: ({ children }) => (
+                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="text-sm text-gray-700 leading-7">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-bold text-gray-900">{children}</strong>
+                    ),
+                  }}
+                >
                   {businessPlans[currentPlanIndex].content}
-                </pre>
+                </ReactMarkdown>
               </div>
 
               <div className="flex justify-between">
@@ -655,7 +729,7 @@ export default function WorkflowPage() {
                   onClick={() => downloadPlan(businessPlans[currentPlanIndex])}
                   className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                 >
-                  마크다운 파일로 저장
+                  워드 파일로 저장
                 </button>
               </div>
             </div>
