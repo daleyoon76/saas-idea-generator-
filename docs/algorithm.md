@@ -1,12 +1,37 @@
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
+> 마지막 업데이트: 2026-02-21
+
+---
 
 ## 전체 흐름
 
 ```
 키워드 입력 → [검색] → 아이디어 생성(LLM) → 아이디어 선택 → [검색] → 사업기획서 생성(LLM) → 결과 출력
 ```
+
+### 핵심 설계 원칙: 단일 소스 아키텍처
+
+클라이언트(`workflow/page.tsx`)는 **데이터만 전송**하고, 프롬프트 구성은 **서버(`/api/generate`)에서 담당**한다.
+서버는 마크다운 파일을 `fs.readFileSync`로 읽어 프롬프트를 조립한다.
+
+| 마크다운 파일 | 역할 | 수정 시 영향 |
+|---|---|---|
+| `app/src/assets/criteria.md` | 아이디어 발굴 기준 (R10) | 아이디어 생성 프롬프트에 자동 반영 |
+| `docs/bizplan-template.md` | 사업기획서 섹션 구조 | 사업기획서 생성 프롬프트에 자동 반영 |
+
+---
+
+## `/api/generate` 요청 타입
+
+`/api/generate`는 `type` 필드에 따라 세 가지 방식으로 동작한다.
+
+| `type` | 서버 동작 | 클라이언트 전송 필드 |
+|--------|-----------|-------------------|
+| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults` |
+| `business-plan` | `bizplan-template.md` 읽기 → `createBusinessPlanPrompt()` 호출 | `idea`, `searchResults` |
+| (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
 ---
 
@@ -18,7 +43,19 @@
 - 결과: 최대 5개 (title, url, snippet)
 - 실패해도 다음 단계 계속 진행
 
-### 1-2. LLM 호출 (`/api/generate`)
+### 1-2. LLM 호출 (`/api/generate`, `type: 'generate-ideas'`)
+
+**데이터 흐름:**
+
+```
+클라이언트: { type: 'generate-ideas', keyword, searchResults, provider, model }
+    ↓
+서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
+    ↓
+createIdeaGenerationPrompt(keyword, searchResults, criteria)
+    ↓
+LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
+```
 
 **프롬프트 구조** (`lib/prompts.ts` > `createIdeaGenerationPrompt`):
 
@@ -26,18 +63,17 @@
 한국어로만 답변하세요.
 
 ## 아이디어 발굴 기준
-[IDEA_DISCOVERY_CRITERIA — criteria.md 기반]
-- 시장 환경 (2026년 SaaS/Agent 트렌드)
-- 유망 유형 3가지:
-    유형1. 초개인화 웰니스 에이전트 (B2C)
-    유형2. 버티컬 B2B 에이전트
-    유형3. AI QA·디버깅 도구
-- 선정 원칙: 명확한 문제 해결 · 충분한 시장 규모 · MVP 빠른 구현
+[criteria.md 전체 내용 — R10 5대 기준]
 
+## 참고할 시장 조사 자료
 [검색 결과 컨텍스트 - 제목/URL/내용 최대 5개]
 
-위 발굴 기준을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를 JSON으로 출력하세요.
+위 발굴 기준과 시장 환경을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를
+아래 JSON 형식으로 출력하세요.
+각 아이디어는 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화,
+바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
 
+```json
 {
   "ideas": [
     {
@@ -56,8 +92,17 @@
   ]
 }
 ```
+```
 
-> `IDEA_DISCOVERY_CRITERIA` 출처: `app/src/assets/criteria.md` (`바이브코딩 SaaS_Agent 아이템 발굴 기준.docx`)
+**아이디어 발굴 기준 요약** (출처: `app/src/assets/criteria.md`, R10):
+
+| 기준 | 핵심 질문 |
+|------|-----------|
+| 1. 수요 형태 변화 | 사용자가 잠든 사이 에이전트가 어떤 업무를 끝내놓는가? |
+| 2. 버티컬 니치 | 빅테크가 쉽게 침범 못 하는 마이크로 니치인가? |
+| 3. 결과 기반 수익화 | 성과를 숫자로 증명하고 과금 근거로 삼을 수 있는가? |
+| 4. 바이브 코딩 타당성 | 에러 발생 시 롤백 가능하고 보안 리스크가 낮은가? |
+| 5. 에이전틱 UX | 관전/지원/자율 모드로 Shared Autonomy를 설계할 수 있는가? |
 
 ### 1-3. JSON 파싱 (응답 후처리)
 
@@ -81,18 +126,41 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 - 결과: 최대 5개
 - 선택된 아이디어마다 각각 검색
 
-### 2-2. LLM 호출 (`/api/generate`)
+### 2-2. LLM 호출 (`/api/generate`, `type: 'business-plan'`)
+
+**데이터 흐름:**
+
+```
+클라이언트: { type: 'business-plan', idea, searchResults, provider, model }
+    ↓
+서버(api/generate): fs.readFileSync('docs/bizplan-template.md')
+    ↓
+createBusinessPlanPrompt(idea, searchResults, template)
+    ↓
+LLM 호출
+```
 
 **프롬프트 구조** (`lib/prompts.ts` > `createBusinessPlanPrompt`):
 
-입력: 아이디어 상세 정보(name, oneLiner, target, problem, features, differentiation, revenueModel) + 검색 결과 + 템플릿(서버에서 읽음)
+```
+한국어로만 답변하세요.
 
-> **템플릿 단일 소스**: 클라이언트는 idea 데이터만 전송. `/api/generate` 서버에서 `docs/bizplan-template.md`를 `fs.readFileSync`로 읽어 프롬프트를 구성한다. 템플릿 수정은 `docs/bizplan-template.md`만 편집하면 된다.
+## 시장 조사 및 참고 자료
+[검색 결과 컨텍스트 - 제목/URL/내용 최대 5개]
 
-작성 규칙:
+다음 서비스에 대한 상세 사업기획서를 작성해주세요.
+
+**서비스 정보:**
+- 서비스명 / 설명 / 대상 고객 / 해결하려는 문제 / 핵심 기능 / 차별화 포인트 / 수익 모델
+
+**작성 규칙:**
 - Bullet point 활용, 항목별 명사형 마무리
-- 통계·수치에 `[1]`, `[2]` 형태 각주 표기
+- 통계·수치에 [1], [2] 형태 각주 표기
 - 마크다운 표 형식으로 비교표·도표 활용
+
+**아래 템플릿 형식에 맞춰 작성하세요:**
+[docs/bizplan-template.md 전체 내용]
+```
 
 **출력 섹션** (`docs/bizplan-template.md` 기준):
 
@@ -126,6 +194,7 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 
 - 모든 LLM 호출은 `/api/generate`로 단일화
 - provider 가용 여부는 페이지 마운트 시 `/api/providers`로 확인
+- Ollama만 `jsonMode`(`format: 'json'`) 지원 — 아이디어 생성 시 활성화
 
 ---
 
@@ -133,10 +202,11 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 
 | 파일 | 역할 |
 |------|------|
-| `app/src/app/workflow/page.tsx` | 전체 워크플로우 상태머신, 검색/LLM 호출 로직 |
-| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 |
-| `app/src/lib/types.ts` | `PROVIDER_CONFIGS`, `WorkflowStep` 타입 |
-| `app/src/app/api/generate/route.ts` | LLM 라우팅 |
+| `app/src/app/workflow/page.tsx` | 전체 워크플로우 상태머신 (클라이언트) |
+| `app/src/app/api/generate/route.ts` | LLM 라우팅 + 프롬프트 조립 (서버) |
 | `app/src/app/api/search/route.ts` | DuckDuckGo 검색 |
-| `docs/bizplan-template.md` | 사업기획서 섹션 구조 — 단일 소스 (수정 시 프롬프트에 자동 반영) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
+| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
+| `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |
+| `app/src/assets/criteria.md` | 아이디어 발굴 기준 — **단일 소스** (R10, 수정 시 자동 반영) |
+| `docs/bizplan-template.md` | 사업기획서 섹션 구조 — **단일 소스** (수정 시 자동 반영) |
