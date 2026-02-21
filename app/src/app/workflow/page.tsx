@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
-import { createIdeaGenerationPrompt, SearchResult } from '@/lib/prompts';
+import { SearchResult } from '@/lib/prompts';
 
 export default function WorkflowPage() {
   const [step, setStep] = useState<WorkflowStep>('keyword');
@@ -78,8 +78,8 @@ export default function WorkflowPage() {
       }
 
       // Step 2: Generate ideas with search context
+      // 프롬프트 구성은 서버(api/generate)에서 app/src/assets/criteria.md를 읽어 처리
       setLoadingMessage('AI가 아이디어를 분석하고 있습니다...');
-      const prompt = createIdeaGenerationPrompt(keyword || undefined, searchData);
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -87,8 +87,9 @@ export default function WorkflowPage() {
         body: JSON.stringify({
           provider: selectedProvider,
           model: PROVIDER_CONFIGS[selectedProvider].model,
-          prompt,
-          type: 'json',
+          type: 'generate-ideas',
+          keyword: keyword || undefined,
+          searchResults: searchData,
         }),
       });
 

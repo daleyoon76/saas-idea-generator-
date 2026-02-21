@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { createBusinessPlanPrompt, SearchResult } from '@/lib/prompts';
+import { createBusinessPlanPrompt, createIdeaGenerationPrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -18,16 +18,35 @@ function buildBusinessPlanPrompt(idea: Idea, searchResults: SearchResult[]): str
   return createBusinessPlanPrompt(idea, searchResults, template);
 }
 
+// app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
+function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: SearchResult[]): string {
+  let criteria: string | undefined;
+  try {
+    const criteriaPath = path.join(process.cwd(), 'src', 'assets', 'criteria.md');
+    criteria = fs.readFileSync(criteriaPath, 'utf-8');
+  } catch {
+    console.warn('criteria.md 읽기 실패, 기본 기준으로 폴백');
+  }
+  return createIdeaGenerationPrompt(keyword, searchResults, criteria);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { provider = 'ollama', model, prompt: rawPrompt, type, idea, searchResults } = body;
     const jsonMode = type === 'json';
 
-    // 사업기획서 요청: 서버에서 템플릿 읽어 프롬프트 생성
-    const prompt = (type === 'business-plan' && idea)
-      ? buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || [])
-      : rawPrompt;
+    // 아이디어 생성 요청: 서버에서 criteria.md 읽어 프롬프트 생성
+    // 사업기획서 요청: 서버에서 bizplan-template.md 읽어 프롬프트 생성
+    let prompt: string;
+    if (type === 'generate-ideas') {
+      const { keyword, searchResults: sr } = body;
+      prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || []);
+    } else if (type === 'business-plan' && idea) {
+      prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
+    } else {
+      prompt = rawPrompt;
+    }
 
     let response: string;
 
