@@ -44,7 +44,7 @@ keyword → generating-ideas → select-ideas → generating-plan → view-plan
 - `createIdeaGenerationPrompt()` — JSON 형식으로 아이디어 3개 요청. 응답 파싱 로직이 workflow 페이지에 내장됨(```json 블록 → ``` 블록 → raw JSON 순서로 시도)
 - `createBusinessPlanPrompt()` — 마크다운 형식의 13개 섹션 기획서 요청
 
-두 함수 모두 DuckDuckGo 검색 결과(`SearchResult[]`)를 받아 프롬프트에 컨텍스트로 삽입한다. 검색은 `/api/search`가 담당하며, 실패해도 AI 생성은 계속 진행된다.
+두 함수 모두 Tavily 검색 결과(`SearchResult[]`)를 받아 프롬프트에 컨텍스트로 삽입한다. 검색은 `/api/search`가 담당하며, 실패해도 AI 생성은 계속 진행된다.
 
 알고리즘 상세 내용은 `docs/algorithm.md` 참고.
 

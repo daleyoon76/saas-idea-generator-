@@ -23,7 +23,7 @@ description: "전체 시스템 구조, 워크플로우 상태머신, AI 추상�
 │                                                           │
 │  POST /api/generate   →  AI 생성 통합 라우트              │
 │  GET  /api/providers  →  AI 공급자 상태 확인              │
-│  POST /api/search     →  DuckDuckGo 웹 검색              │
+│  POST /api/search     →  Tavily 웹 검색                  │
 │  GET  /api/ollama     →  Ollama 연결 확인 (레거시)        │
 │  POST /api/ollama     →  Ollama 직접 호출 (레거시)        │
 └──────┬──────────────────────┬──────────────────────────┘
@@ -128,8 +128,8 @@ providers/route.ts
 키워드 입력 (선택)
      │
      ▼
-POST /api/search  ← "{keyword} SaaS 트렌드 시장 2024"
-     │              DuckDuckGo HTML 파싱
+POST /api/search  ← "최신 {keyword} SaaS 트렌드"
+     │              Tavily API 호출
      │              결과 5개 (title, url, snippet)
      ▼
 createIdeaGenerationPrompt(keyword, searchResults)
@@ -203,24 +203,23 @@ type AIProvider = 'ollama' | 'claude' | 'gemini' | 'openai';
 
 ## 6. 검색 엔진 구조
 
-`/api/search`는 외부 API 키 없이 DuckDuckGo HTML 엔드포인트를 직접 파싱한다.
+`/api/search`는 `TAVILY_API_KEY`를 사용해 Tavily REST API를 호출한다.
 
 ```
 POST /api/search { query, count=5 }
      │
      ▼
-fetch("https://html.duckduckgo.com/html/?q=...")
-     │
+fetch("https://api.tavily.com/search")
+     │  { api_key, query, max_results, search_depth: "basic" }
      ▼
-HTML 정규식 파싱
-     ├─ 링크: class="result__a"  → url, title 추출
-     └─ 스니펫: class="result__snippet" → snippet 추출
+data.results[] 매핑
+     └─ { title, url, content } → SearchResult { title, url, snippet }
      │
      ▼
 SearchResult[] { title, url, snippet }
 ```
 
-**주의:** DuckDuckGo HTML 구조 변경 시 파싱 로직이 깨질 수 있다. 결과가 0개일 경우 AI 프롬프트에 검색 컨텍스트가 포함되지 않을 뿐이며 전체 흐름에는 영향 없다.
+**주의:** `TAVILY_API_KEY`가 없으면 500 오류를 반환한다. 결과가 0개일 경우 AI 프롬프트에 검색 컨텍스트가 포함되지 않을 뿐이며 전체 흐름에는 영향 없다.
 
 ---
 

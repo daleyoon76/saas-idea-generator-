@@ -78,7 +78,12 @@ export async function POST(request: NextRequest) {
 }
 
 async function generateWithOllama(model: string, prompt: string, jsonMode: boolean = false): Promise<string> {
-  const body: Record<string, unknown> = { model, prompt, stream: false };
+  const body: Record<string, unknown> = {
+    model,
+    prompt,
+    stream: false,
+    options: { num_predict: 4096, num_ctx: 8192 },
+  };
   if (jsonMode) {
     body.format = 'json';
   }

@@ -292,7 +292,7 @@ ollama pull gemma2:9b  # 모델 없으면 다운로드
 
 ### 검색 결과 0개
 
-DuckDuckGo 파싱이 실패해도 AI 생성은 계속 진행된다. 검색 없이 AI만으로 생성하는 상태. 브라우저 Network 탭에서 `/api/search` 응답을 확인해 파싱 이슈 여부 진단.
+Tavily API 호출이 실패해도 AI 생성은 계속 진행된다. 검색 없이 AI만으로 생성하는 상태. 브라우저 Network 탭에서 `/api/search` 응답을 확인해 오류 여부 진단.
 
 ### 포트 충돌
 

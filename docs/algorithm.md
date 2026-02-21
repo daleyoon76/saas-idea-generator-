@@ -209,7 +209,7 @@ LLM 호출
 |------|------|
 | `app/src/app/workflow/page.tsx` | 전체 워크플로우 상태머신 (클라이언트) |
 | `app/src/app/api/generate/route.ts` | LLM 라우팅 + 프롬프트 조립 (서버) |
-| `app/src/app/api/search/route.ts` | DuckDuckGo 검색 |
+| `app/src/app/api/search/route.ts` | Tavily 검색 |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |

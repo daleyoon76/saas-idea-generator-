@@ -65,7 +65,7 @@ export default function WorkflowPage() {
           const searchRes = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: `${keyword} SaaS 트렌드 시장 2024`, count: 5 }),
+            body: JSON.stringify({ query: `최신 ${keyword} SaaS 트렌드`, count: 5 }),
           });
           if (searchRes.ok) {
             const data = await searchRes.json();
