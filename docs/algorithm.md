@@ -64,7 +64,7 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 
 **프롬프트 구조** (`lib/prompts.ts` > `createIdeaGenerationPrompt`):
 
-```
+~~~~
 한국어로만 답변하세요.
 
 ## 아이디어 발굴 기준
@@ -97,7 +97,7 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
   ]
 }
 ```
-```
+~~~~
 
 **아이디어 발굴 기준 요약** (출처: `app/src/assets/criteria.md`, R10):
 
