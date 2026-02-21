@@ -14,24 +14,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
     }
 
-    // Use DuckDuckGo HTML search
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      throw new Error('TAVILY_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
+    }
 
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        max_results: count,
+        search_depth: 'basic',
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Search failed: ${response.statusText}`);
+      const err = await response.json();
+      throw new Error(`Tavily 오류: ${err.message || response.statusText}`);
     }
 
-    const html = await response.text();
-    const results = parseSearchResults(html, count);
+    const data = await response.json();
+    const results: SearchResult[] = (data.results || []).map((r: { title: string; url: string; content: string }) => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.content,
+    }));
 
     return NextResponse.json({ results });
   } catch (error) {
@@ -41,43 +50,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function parseSearchResults(html: string, count: number): SearchResult[] {
-  const results: SearchResult[] = [];
-
-  // Extract result blocks - DuckDuckGo HTML uses specific class names
-  // Pattern: <a class="result__a" href="...">title</a> and <a class="result__snippet">snippet</a>
-
-  // Extract links with titles
-  const linkRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
-  const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>([^<]*(?:<[^>]*>[^<]*)*)<\/a>/gi;
-
-  const links: { url: string; title: string }[] = [];
-  let linkMatch;
-  while ((linkMatch = linkRegex.exec(html)) !== null) {
-    const url = decodeURIComponent(linkMatch[1].replace(/\/l\/\?uddg=/, '').split('&')[0]);
-    const title = linkMatch[2].replace(/<[^>]*>/g, '').trim();
-    if (url.startsWith('http') && title) {
-      links.push({ url, title });
-    }
-  }
-
-  const snippets: string[] = [];
-  let snippetMatch;
-  while ((snippetMatch = snippetRegex.exec(html)) !== null) {
-    const snippet = snippetMatch[1].replace(/<[^>]*>/g, '').trim();
-    snippets.push(snippet);
-  }
-
-  // Combine links with snippets
-  for (let i = 0; i < Math.min(links.length, count); i++) {
-    results.push({
-      title: links[i].title,
-      url: links[i].url,
-      snippet: snippets[i] || '',
-    });
-  }
-
-  return results;
 }
