@@ -7,34 +7,29 @@
     "light": "#818cf8",
     "dark": "#4338ca"
   },
-  "topbarLinks": [
-    {
-      "name": "GitHub",
-      "url": "https://github.com"
-    }
-  ],
-  "navigation": [
-    {
-      "group": "시작하기",
-      "pages": [
-        "docs/introduction",
-        "docs/dev-guide"
-      ]
-    },
-    {
-      "group": "설계",
-      "pages": [
-        "docs/architecture",
-        "docs/algorithm"
-      ]
-    },
-    {
-      "group": "참고 자료",
-      "pages": [
-        "docs/criteria",
-        "docs/bizplan-template"
-      ]
-    }
-  ],
-  "footerSocials": {}
+  "navigation": {
+    "groups": [
+      {
+        "group": "시작하기",
+        "pages": [
+          "docs/introduction",
+          "docs/dev-guide"
+        ]
+      },
+      {
+        "group": "설계",
+        "pages": [
+          "docs/architecture",
+          "docs/algorithm"
+        ]
+      },
+      {
+        "group": "참고 자료",
+        "pages": [
+          "docs/criteria",
+          "docs/bizplan-template"
+        ]
+      }
+    ]
+  }
 }
