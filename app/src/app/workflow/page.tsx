@@ -715,6 +715,32 @@ export default function WorkflowPage() {
                     strong: ({ children }) => (
                       <strong className="font-bold text-gray-900">{children}</strong>
                     ),
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="w-full border-collapse text-sm">{children}</table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-slate-100">{children}</thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody className="divide-y divide-gray-200">{children}</tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="hover:bg-gray-50">{children}</tr>
+                    ),
+                    th: ({ children }) => (
+                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
+                    ),
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm hover:text-blue-800">{children}</a>
+                    ),
+                    hr: () => (
+                      <hr className="border-gray-200 my-6" />
+                    ),
                   }}
                 >
                   {businessPlans[currentPlanIndex].content}

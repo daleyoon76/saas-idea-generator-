@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { provider = 'ollama', model, prompt: rawPrompt, type, idea, searchResults } = body;
-    const jsonMode = type === 'json';
+    const jsonMode = type === 'json' || type === 'generate-ideas';
 
     // 아이디어 생성 요청: 서버에서 criteria.md 읽어 프롬프트 생성
     // 사업기획서 요청: 서버에서 bizplan-template.md 읽어 프롬프트 생성
