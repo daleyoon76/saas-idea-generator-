@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+import { createBusinessPlanPrompt, SearchResult } from '@/lib/prompts';
+import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+// docs/bizplan-template.md 를 서버에서 읽어 사업기획서 프롬프트 생성
+function buildBusinessPlanPrompt(idea: Idea, searchResults: SearchResult[]): string {
+  let template: string | undefined;
+  try {
+    const templatePath = path.join(process.cwd(), '..', 'docs', 'bizplan-template.md');
+    template = fs.readFileSync(templatePath, 'utf-8');
+  } catch {
+    console.warn('bizplan-template.md 읽기 실패, 기본 구조로 폴백');
+  }
+  return createBusinessPlanPrompt(idea, searchResults, template);
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { provider = 'ollama', model, prompt, type } = body;
+    const { provider = 'ollama', model, prompt: rawPrompt, type, idea, searchResults } = body;
     const jsonMode = type === 'json';
+
+    // 사업기획서 요청: 서버에서 템플릿 읽어 프롬프트 생성
+    const prompt = (type === 'business-plan' && idea)
+      ? buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || [])
+      : rawPrompt;
 
     let response: string;
 

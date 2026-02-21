@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
-import { createIdeaGenerationPrompt, createBusinessPlanPrompt, SearchResult } from '@/lib/prompts';
+import { createIdeaGenerationPrompt, SearchResult } from '@/lib/prompts';
 
 export default function WorkflowPage() {
   const [step, setStep] = useState<WorkflowStep>('keyword');
@@ -247,8 +247,8 @@ export default function WorkflowPage() {
         }
 
         // Step 2: Generate business plan with search context
+        // 프롬프트 구성은 서버(api/generate)에서 docs/bizplan-template.md를 읽어 처리
         setLoadingMessage(`"${idea.name}" 사업기획서 작성 중...`);
-        const prompt = createBusinessPlanPrompt(idea, planSearchResults);
 
         const res = await fetch('/api/generate', {
           method: 'POST',
@@ -256,7 +256,9 @@ export default function WorkflowPage() {
           body: JSON.stringify({
             provider: selectedProvider,
             model: PROVIDER_CONFIGS[selectedProvider].model,
-            prompt,
+            type: 'business-plan',
+            idea,
+            searchResults: planSearchResults,
           }),
         });
 

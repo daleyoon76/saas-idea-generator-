@@ -85,14 +85,16 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 
 **프롬프트 구조** (`lib/prompts.ts` > `createBusinessPlanPrompt`):
 
-입력: 아이디어 상세 정보(name, oneLiner, target, problem, features, differentiation, revenueModel) + 검색 결과
+입력: 아이디어 상세 정보(name, oneLiner, target, problem, features, differentiation, revenueModel) + 검색 결과 + 템플릿(서버에서 읽음)
+
+> **템플릿 단일 소스**: 클라이언트는 idea 데이터만 전송. `/api/generate` 서버에서 `docs/bizplan-template.md`를 `fs.readFileSync`로 읽어 프롬프트를 구성한다. 템플릿 수정은 `docs/bizplan-template.md`만 편집하면 된다.
 
 작성 규칙:
 - Bullet point 활용, 항목별 명사형 마무리
 - 통계·수치에 `[1]`, `[2]` 형태 각주 표기
 - 마크다운 표 형식으로 비교표·도표 활용
 
-**출력 섹션 (13개):**
+**출력 섹션** (`docs/bizplan-template.md` 기준):
 
 | 번호 | 섹션 |
 |------|------|
@@ -102,9 +104,10 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 | 4 | 솔루션 (Solution) |
 | 5 | 경쟁 분석 (Competitive Analysis) |
 | 6 | 차별화 (Differentiator) |
-| 7 | 플랫폼 전략 (Platform Strategy) |
+| 7 | 플랫폼 전략 (Platform Strategy) [선택] |
 | 8 | 시장 정의·규모 (Market Definition & TAM) |
 | 9 | 로드맵 (Roadmap) |
+| 10 | 상세 프로젝트 계획 (Detail Project Plan) [선택] |
 | 11 | 사업 모델 (Business Model) |
 | 12 | 사업 전망 (Business Forecast) |
 | 13 | 리스크 분석 (Risk Analysis) |
@@ -135,4 +138,5 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 | `app/src/lib/types.ts` | `PROVIDER_CONFIGS`, `WorkflowStep` 타입 |
 | `app/src/app/api/generate/route.ts` | LLM 라우팅 |
 | `app/src/app/api/search/route.ts` | DuckDuckGo 검색 |
+| `docs/bizplan-template.md` | 사업기획서 섹션 구조 — 단일 소스 (수정 시 프롬프트에 자동 반영) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
