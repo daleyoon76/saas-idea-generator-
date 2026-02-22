@@ -201,7 +201,7 @@ ${searchContext}
 - 시장 정의·규모: TAM / SAM / SOM 3단계 구분 필수
 - 사업 모델: 가격 티어 예시(Starter / Pro / Enterprise 등) 포함
 - 리스크 분석: 규제·법률 리스크 1개 이상 반드시 포함
-- 참고문헌: 검색 자료 URL 전체를 표 형식으로 나열
+- 참고문헌: 검색 자료 URL 전체를 불릿포인트로 나열 (형식: "- [번호] 내용 요약\n  - 출처: 출처명\n  - URL: URL")
 
 ${templateSection}`;
 }
