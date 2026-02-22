@@ -37,7 +37,7 @@ function formatTime(seconds: number): string {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
-import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
+import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 
 export default function WorkflowPage() {
@@ -47,6 +47,8 @@ export default function WorkflowPage() {
   const [selectedIdeas, setSelectedIdeas] = useState<number[]>([]);
   const [businessPlans, setBusinessPlans] = useState<BusinessPlan[]>([]);
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
+  const [prds, setPRDs] = useState<PRD[]>([]);
+  const [currentPRDIndex, setCurrentPRDIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
@@ -55,6 +57,12 @@ export default function WorkflowPage() {
     claude: null,
     gemini: null,
     openai: null,
+  });
+  const [selectedModels, setSelectedModels] = useState<Record<AIProvider, string>>({
+    ollama: PROVIDER_CONFIGS.ollama.defaultModel,
+    claude: PROVIDER_CONFIGS.claude.defaultModel,
+    gemini: PROVIDER_CONFIGS.gemini.defaultModel,
+    openai: PROVIDER_CONFIGS.openai.defaultModel,
   });
   const [rawResponse, setRawResponse] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -71,6 +79,7 @@ export default function WorkflowPage() {
   const [dirName, setDirName] = useState('다운로드');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
+  const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
 
   useEffect(() => {
     checkProviders();
@@ -188,7 +197,7 @@ export default function WorkflowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: selectedProvider,
-          model: PROVIDER_CONFIGS[selectedProvider].model,
+          model: selectedModels[selectedProvider],
           type: 'generate-ideas',
           keyword: keyword || undefined,
           searchResults: searchData,
@@ -371,7 +380,7 @@ export default function WorkflowPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider: selectedProvider,
-            model: PROVIDER_CONFIGS[selectedProvider].model,
+            model: selectedModels[selectedProvider],
             type: 'business-plan',
             idea,
             searchResults: planSearchResults,
@@ -566,8 +575,9 @@ export default function WorkflowPage() {
     URL.revokeObjectURL(url);
   }
 
-  function openSaveDialog(plan: BusinessPlan) {
+  function openSaveDialog(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan') {
     setPendingPlan(plan);
+    setPendingPlanType(type);
     setShowSaveDialog(true);
   }
 
@@ -586,9 +596,10 @@ export default function WorkflowPage() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
     const blob = await buildDocxBlob(pendingPlan);
+    const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
     const fileName = keyword
-      ? `사업기획서_${keyword}_${pendingPlan.ideaName}.docx`
-      : `사업기획서_${pendingPlan.ideaName}.docx`;
+      ? `${prefix}_${keyword}_${pendingPlan.ideaName}.docx`
+      : `${prefix}_${pendingPlan.ideaName}.docx`;
     if (dirHandle) {
       try {
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
@@ -604,6 +615,64 @@ export default function WorkflowPage() {
     }
   }
 
+  async function generatePRD() {
+    const currentPlan = businessPlans[currentPlanIndex];
+    if (!currentPlan) return;
+    const idea = ideas.find((i) => i.id === currentPlan.ideaId);
+    if (!idea) return;
+
+    setIsLoading(true);
+    setError(null);
+    setStep('generating-prd');
+    setLoadingMessage(`"${idea.name}" PRD 작성 중...`);
+    setProgressCurrent(0);
+    setProgressTotal(1);
+    setCompletedSteps([]);
+    startTimer(75000);
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModels[selectedProvider],
+          type: 'generate-prd',
+          idea,
+          businessPlanContent: currentPlan.content,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`PRD 생성 실패: ${idea.name}`);
+      }
+
+      const data = await res.json();
+      const newPRD: PRD = {
+        ideaId: idea.id,
+        ideaName: idea.name,
+        content: data.response,
+        createdAt: new Date().toISOString(),
+      };
+
+      setPRDs((prev) => {
+        const filtered = prev.filter((p) => p.ideaId !== idea.id);
+        return [...filtered, newPRD];
+      });
+      setCurrentPRDIndex(0);
+      setProgressCurrent(1);
+      setCompletedSteps([`"${idea.name}" PRD 작성 완료`]);
+      setStep('view-prd');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setStep('view-plan');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+      stopTimer();
+    }
+  }
+
   function reset() {
     stopTimer();
     setStep('keyword');
@@ -612,6 +681,8 @@ export default function WorkflowPage() {
     setSelectedIdeas([]);
     setBusinessPlans([]);
     setCurrentPlanIndex(0);
+    setPRDs([]);
+    setCurrentPRDIndex(0);
     setError(null);
     setRawResponse('');
   }
@@ -708,10 +779,10 @@ export default function WorkflowPage() {
                   const available = availableProviders[provider];
                   const isSelected = selectedProvider === provider;
                   return (
-                    <button
+                    <div
                       key={provider}
                       onClick={() => setSelectedProvider(provider)}
-                      className={`relative p-3 rounded-lg border-2 text-left transition ${
+                      className={`relative p-3 rounded-lg border-2 text-left transition cursor-pointer ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50'
                           : 'border-gray-200 hover:border-gray-300'
@@ -728,7 +799,19 @@ export default function WorkflowPage() {
                           <span className="text-xs text-red-400">● 미설정</span>
                         )}
                       </div>
-                    </button>
+                      {isSelected && cfg.models.length > 1 && (
+                        <select
+                          value={selectedModels[provider]}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setSelectedModels(prev => ({ ...prev, [provider]: e.target.value }))}
+                          className="mt-2 w-full text-xs border border-blue-300 rounded px-1.5 py-1 bg-white text-gray-700 cursor-pointer"
+                        >
+                          {cfg.models.map(m => (
+                            <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -1104,7 +1187,7 @@ export default function WorkflowPage() {
                 </ReactMarkdown>
               </div>
 
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-3">
                 <button
                   onClick={reset}
                   className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
@@ -1127,6 +1210,209 @@ export default function WorkflowPage() {
                   워드 파일로 저장
                 </button>
               </div>
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={generatePRD}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                  개발문서(PRD) 생성하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step: Generating PRD */}
+        {step === 'generating-prd' && (
+          <div className="bg-white rounded-lg shadow p-8">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">개발문서(PRD) 작성 중</h2>
+
+            {/* Time info */}
+            <div className="flex gap-8 mb-5">
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
+                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+              </div>
+              {etaSeconds !== null && (
+                <div>
+                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
+                  <div className="font-mono text-base font-semibold text-indigo-600">
+                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-1 flex justify-between items-center text-sm">
+              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-medium text-indigo-600">
+                {Math.round((progressCurrent / progressTotal) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
+              <div
+                className="bg-indigo-600 h-2 rounded-full transition-all duration-700 ease-in-out"
+                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
+              />
+            </div>
+
+            {/* Completed steps */}
+            <div className="space-y-2 mb-4">
+              {completedSteps.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {msg}
+                </div>
+              ))}
+            </div>
+
+            {/* Current step */}
+            {progressCurrent < progressTotal && (
+              <div className="flex items-center gap-2 text-sm text-indigo-600">
+                <div className="animate-spin w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full flex-shrink-0" />
+                {loadingMessage || 'PRD 초안을 작성하는 중입니다...'}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step: View PRD */}
+        {step === 'view-prd' && prds.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-8">
+            {/* PRD Tabs (여러 아이디어 선택 시) */}
+            {prds.length > 1 && (
+              <div className="flex space-x-2 mb-6 overflow-x-auto">
+                {prds.map((prd, idx) => (
+                  <button
+                    key={prd.ideaId}
+                    onClick={() => setCurrentPRDIndex(idx)}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap ${
+                      currentPRDIndex === idx
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {prd.ideaName}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Current PRD */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {prds[currentPRDIndex].ideaName} PRD
+                </h2>
+                <button
+                  onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  제일 아래로
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h2: ({ children }) => (
+                      <div className="bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
+                        {children}
+                      </div>
+                    ),
+                    h3: ({ children }) => (
+                      <div className="bg-indigo-50 text-indigo-800 px-4 py-2 border-l-4 border-indigo-500 font-semibold text-base mt-5 mb-2">
+                        {children}
+                      </div>
+                    ),
+                    h4: ({ children }) => (
+                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
+                        {children}
+                      </div>
+                    ),
+                    p: ({ children }) => (
+                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="text-sm text-gray-700 leading-7">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-bold text-gray-900">{children}</strong>
+                    ),
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="w-full border-collapse text-sm">{children}</table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-indigo-50">{children}</thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody className="divide-y divide-gray-200">{children}</tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="hover:bg-gray-50">{children}</tr>
+                    ),
+                    th: ({ children }) => (
+                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
+                    ),
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline text-sm hover:text-indigo-800">{children}</a>
+                    ),
+                    hr: () => (
+                      <hr className="border-gray-200 my-6" />
+                    ),
+                  }}
+                >
+                  {prds[currentPRDIndex].content}
+                </ReactMarkdown>
+              </div>
+
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                <button
+                  onClick={() => setStep('view-plan')}
+                  className="px-6 py-3 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 transition"
+                >
+                  사업기획서로 돌아가기
+                </button>
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  제일 위로
+                </button>
+                <button
+                  onClick={reset}
+                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  새로 시작
+                </button>
+                <button
+                  onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd')}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                >
+                  워드 파일로 저장
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1141,7 +1427,10 @@ export default function WorkflowPage() {
             <div className="mb-4">
               <div className="text-xs text-gray-500 mb-1">파일명</div>
               <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-                {keyword ? `사업기획서_${keyword}_${pendingPlan.ideaName}.docx` : `사업기획서_${pendingPlan.ideaName}.docx`}
+                {(() => {
+                  const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
+                  return keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}.docx` : `${prefix}_${pendingPlan.ideaName}.docx`;
+                })()}
               </div>
             </div>
 

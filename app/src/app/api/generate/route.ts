@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { createBusinessPlanPrompt, createIdeaGenerationPrompt, SearchResult } from '@/lib/prompts';
+import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -16,6 +16,18 @@ function buildBusinessPlanPrompt(idea: Idea, searchResults: SearchResult[]): str
     console.warn('bizplan-template.md 읽기 실패, 기본 구조로 폴백');
   }
   return createBusinessPlanPrompt(idea, searchResults, template);
+}
+
+// docs/prd-template.md 를 서버에서 읽어 PRD 프롬프트 생성
+function buildPRDPrompt(idea: Idea, businessPlanContent: string): string {
+  let template: string | undefined;
+  try {
+    const templatePath = path.join(process.cwd(), '..', 'docs', 'prd-template.md');
+    template = fs.readFileSync(templatePath, 'utf-8');
+  } catch {
+    console.warn('prd-template.md 읽기 실패, 기본 구조로 폴백');
+  }
+  return createPRDPrompt(idea, businessPlanContent, template);
 }
 
 // app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
@@ -38,17 +50,20 @@ export async function POST(request: NextRequest) {
 
     // 아이디어 생성 요청: 서버에서 criteria.md 읽어 프롬프트 생성
     // 사업기획서 요청: 서버에서 bizplan-template.md 읽어 프롬프트 생성
+    // PRD 요청: 서버에서 prd-template.md 읽어 프롬프트 생성
     let prompt: string;
     if (type === 'generate-ideas') {
       const { keyword, searchResults: sr } = body;
       prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || []);
     } else if (type === 'business-plan' && idea) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
+    } else if (type === 'generate-prd' && idea) {
+      prompt = buildPRDPrompt(idea as Idea, body.businessPlanContent as string || '');
     } else {
       prompt = rawPrompt;
     }
 
-    const maxTokens = type === 'business-plan' ? 16000 : 8192;
+    const maxTokens = (type === 'business-plan' || type === 'generate-prd') ? 16000 : 8192;
     let response: string;
 
     switch (provider) {

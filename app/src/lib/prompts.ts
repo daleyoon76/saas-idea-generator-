@@ -66,6 +66,35 @@ ${searchContext}
 위 형식을 정확히 따라서 창의적인 아이디어 3개를 JSON으로 출력하세요.`;
 }
 
+export function createPRDPrompt(idea: {
+  name: string;
+}, businessPlanContent: string, template?: string): string {
+  const templateSection = template
+    ? `위 사업기획서를 바탕으로 아래 PRD 템플릿을 작성하세요.
+문서 제목은 "# ${idea.name} PRD"로 시작하세요.
+
+${template}`
+    : `위 사업기획서를 바탕으로 PRD를 작성하세요.
+문서 제목은 "# ${idea.name} PRD"로 시작하고, 다음 섹션을 포함하세요:
+배경 및 목적 / 대상 사용자 / 핵심 요구사항(사용자 스토리, 기능적·비기능적 요구사항) / 인수 조건 / 제외 범위 / 사용자 플로우 / 데이터 모델 / API 엔드포인트 / 우선순위 / 성공 지표 / 기술 스택 제안`;
+
+  return `한국어로만 답변하세요.
+
+⚠️ 작성 원칙:
+- 가상의 수치나 기술 스택을 임의로 생성하지 마세요.
+- 모든 내용은 아래 사업기획서에서 도출하세요.
+- 각 섹션의 [대괄호] 안 지시문을 따라 작성하고, 지시문 자체는 출력에서 제거하세요.
+- 인수 조건은 Given / When / Then 형식으로 작성하세요.
+
+## 참고 사업기획서
+
+${businessPlanContent}
+
+---
+
+${templateSection}`;
+}
+
 export function createBusinessPlanPrompt(idea: {
   name: string;
   oneLiner: string;
