@@ -562,7 +562,7 @@ export default function WorkflowPage() {
       } else if (/^## /.test(line) && !/^###/.test(line)) {
         children.push(new Paragraph({
           children: [new TextRun({ text: line.slice(3), color: DC.white, bold: true, size: 28, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
-          shading: { type: ShadingType.SOLID, color: DC.accent, fill: DC.accent },
+          shading: { type: ShadingType.CLEAR, fill: DC.accent, color: 'auto' },
           spacing: { before: 480, after: 160 },
           indent: { left: 200, right: 200 },
         }));
@@ -604,9 +604,10 @@ export default function WorkflowPage() {
             new TableRow({
               tableHeader: true,
               children: headerCells.map(text => new TableCell({
-                shading: { fill: DC.cream, type: ShadingType.SOLID, color: 'auto' },
+                // CLEAR = 배경색만 채움 (SOLID는 전경 패턴으로 덮어 버림)
+                shading: { type: ShadingType.CLEAR, fill: DC.cream, color: 'auto' },
                 children: [new Paragraph({
-                  children: [new TextRun({ text, bold: true, size: 20, color: DC.textDark })],
+                  children: [new TextRun({ text, bold: true, size: 20, color: DC.textDark, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
                   spacing: { after: 60 },
                 })],
               })),
@@ -617,8 +618,8 @@ export default function WorkflowPage() {
               return new TableRow({
                 children: cells.slice(0, colCount).map(text => new TableCell({
                   shading: rowIdx % 2 === 1
-                    ? { fill: 'FDF5EE', type: ShadingType.SOLID, color: 'auto' }
-                    : undefined,
+                    ? { type: ShadingType.CLEAR, fill: 'FDF5EE', color: 'auto' }
+                    : { type: ShadingType.CLEAR, fill: 'FFFFFF', color: 'auto' },
                   children: [new Paragraph({ children: parseInlineText(text), spacing: { after: 60 } })],
                 })),
               });
