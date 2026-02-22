@@ -71,11 +71,24 @@ export async function POST(request: NextRequest) {
       prompt = rawPrompt;
     }
 
-    const isLongDoc = type === 'business-plan' || type === 'generate-prd' ||
-      type === 'full-plan-market' || type === 'full-plan-competition' ||
-      type === 'full-plan-strategy' || type === 'full-plan-finance';
-    // generate-ideas는 JSON 3개 + 긴 rationale 포함으로 12000 토큰 필요
-    const maxTokens = isLongDoc ? 16000 : type === 'generate-ideas' ? 12000 : 8192;
+    // ── 토큰 한도 정책 (개인 사용: 프로덕션 적정값 × 3) ────────────────────
+    // 타입                  프로덕션  개인(×3)
+    // generate-ideas          4,000   12,000
+    // business-plan           8,000   24,000
+    // full-plan-* (에이전트)   6,000   18,000
+    // generate-prd            5,000   15,000
+    // 기타                    3,000    9,000
+    // ※ 프로덕션 전환 시 각 값을 1/3로 줄이고 최적화 검토
+    const TOKEN_LIMITS: Record<string, number> = {
+      'generate-ideas':        12000,
+      'business-plan':         24000,
+      'full-plan-market':      18000,
+      'full-plan-competition': 18000,
+      'full-plan-strategy':    18000,
+      'full-plan-finance':     18000,
+      'generate-prd':          15000,
+    };
+    const maxTokens = TOKEN_LIMITS[type] ?? 9000;
     let response: string;
 
     switch (provider) {
