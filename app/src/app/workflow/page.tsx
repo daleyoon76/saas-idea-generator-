@@ -656,7 +656,9 @@ export default function WorkflowPage() {
   async function executeSave() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
-    const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
+    const prefix = pendingPlanType === 'prd'
+      ? 'PRD'
+      : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
     const baseName = keyword
       ? `${prefix}_${keyword}_${pendingPlan.ideaName}`
       : `${prefix}_${pendingPlan.ideaName}`;
@@ -1961,7 +1963,9 @@ export default function WorkflowPage() {
               <div className="text-xs text-gray-500 mb-1">파일명</div>
               <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
                 {(() => {
-                  const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
+                  const prefix = pendingPlanType === 'prd'
+                    ? 'PRD'
+                    : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
                   const base = keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}` : `${prefix}_${pendingPlan.ideaName}`;
                   return `${base}.${pendingFileFormat}`;
                 })()}
