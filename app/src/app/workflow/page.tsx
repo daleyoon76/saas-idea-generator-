@@ -499,11 +499,12 @@ export default function WorkflowPage() {
   }
 
   function parseInlineText(text: string): TextRun[] {
+    const F = { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } as const;
     return text.split(/(\*\*[^*]+\*\*)/).map((part) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return new TextRun({ text: part.slice(2, -2), bold: true });
+        return new TextRun({ text: part.slice(2, -2), bold: true, font: F });
       }
-      return new TextRun({ text: part });
+      return new TextRun({ text: part, font: F });
     });
   }
 
@@ -551,16 +552,16 @@ export default function WorkflowPage() {
       // H1: # 제목 → 다크 브라운 대제목
       if (/^# /.test(line) && !/^##/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(2), bold: true, size: 40, color: DC.textDark })],
+          children: [new TextRun({ text: line.slice(2), bold: true, size: 40, color: DC.textDark, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
           spacing: { before: 400, after: 240 },
           border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: DC.accent, space: 6 } },
         }));
         i++;
 
-      // H2: ## → 테라코타 배경 + 흰 글자 (웹 UI의 섹션 헤더와 동일)
+      // H2: ## → 테라코타 배경 + 흰 글자
       } else if (/^## /.test(line) && !/^###/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(3), color: DC.white, bold: true, size: 28 })],
+          children: [new TextRun({ text: line.slice(3), color: DC.white, bold: true, size: 28, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
           shading: { type: ShadingType.SOLID, color: DC.accent, fill: DC.accent },
           spacing: { before: 480, after: 160 },
           indent: { left: 200, right: 200 },
@@ -570,7 +571,7 @@ export default function WorkflowPage() {
       // H3: ### → 앰버 좌측 보더 + 다크 브라운 글자
       } else if (/^### /.test(line) && !/^####/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(4), color: DC.textDark, bold: true, size: 24 })],
+          children: [new TextRun({ text: line.slice(4), color: DC.textDark, bold: true, size: 24, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
           border: { left: { style: BorderStyle.SINGLE, size: 24, color: DC.amber, space: 8 } },
           indent: { left: 200 },
           spacing: { before: 280, after: 80 },
@@ -580,7 +581,7 @@ export default function WorkflowPage() {
       // H4: #### → 크림 좌측 보더 + 미드 브라운 글자
       } else if (/^#### /.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(5), color: DC.textMid, bold: true, size: 22 })],
+          children: [new TextRun({ text: line.slice(5), color: DC.textMid, bold: true, size: 22, font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
           border: { left: { style: BorderStyle.SINGLE, size: 12, color: DC.border, space: 8 } },
           indent: { left: 160 },
           spacing: { before: 200, after: 60 },
@@ -669,6 +670,21 @@ export default function WorkflowPage() {
     }
 
     const doc = new Document({
+      // 문서 기본 폰트: 영문 Calibri + 한글 맑은 고딕 (웹 UI Outfit + Noto Sans KR에 대응)
+      styles: {
+        default: {
+          document: {
+            run: {
+              font: { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' },
+              size: 22,
+              color: DC.textDark,
+            },
+            paragraph: {
+              spacing: { line: 288, lineRule: 'auto' },
+            },
+          },
+        },
+      },
       numbering: {
         config: [{ reference: 'default-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'left' }] }],
       },
