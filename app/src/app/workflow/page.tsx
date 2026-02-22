@@ -86,6 +86,8 @@ export default function WorkflowPage() {
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
   const [pendingFileFormat, setPendingFileFormat] = useState<'docx' | 'md'>('docx');
+  // 실측 생성 시간 (아이디어 생성 / 사업기획서 생성 완료 후 표시)
+  const [lastGenTime, setLastGenTime] = useState<{ seconds: number; label: string } | null>(null);
 
   useEffect(() => {
     checkProviders();
@@ -376,6 +378,11 @@ export default function WorkflowPage() {
 
       updateStoredTiming('ideaLLM', Date.now() - llmStart);
       setProgressCurrent(2);
+      if (processStartRef.current) {
+        const secs = Math.round((Date.now() - processStartRef.current) / 1000);
+        const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(m => m.id === selectedModels[selectedProvider])?.label ?? selectedModels[selectedProvider];
+        setLastGenTime({ seconds: secs, label: `${PROVIDER_CONFIGS[selectedProvider].label} ${modelLabel}` });
+      }
       setStep('select-ideas');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -469,6 +476,11 @@ export default function WorkflowPage() {
 
       setBusinessPlans(plans);
       setCurrentPlanIndex(0);
+      if (processStartRef.current) {
+        const secs = Math.round((Date.now() - processStartRef.current) / 1000);
+        const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(m => m.id === selectedModels[selectedProvider])?.label ?? selectedModels[selectedProvider];
+        setLastGenTime({ seconds: secs, label: `${PROVIDER_CONFIGS[selectedProvider].label} ${modelLabel}` });
+      }
       setStep('view-plan');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -1077,6 +1089,12 @@ export default function WorkflowPage() {
                   const cfg = PROVIDER_CONFIGS[provider];
                   const available = availableProviders[provider];
                   const isSelected = selectedProvider === provider;
+                  // 현재 선택된 모델의 스펙
+                  const currentModel = cfg.models.find(m => m.id === selectedModels[provider]) ?? cfg.models[0];
+                  const dotRow = (score: number, color: string) =>
+                    Array.from({ length: 5 }, (_, i) => (
+                      <span key={i} style={{ color: i < score ? color : C.border, fontSize: 10 }}>●</span>
+                    ));
                   return (
                     <div
                       key={provider}
@@ -1087,17 +1105,34 @@ export default function WorkflowPage() {
                         : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
                       }
                     >
-                      <div className="font-semibold text-sm" style={{ color: C.textDark }}>{cfg.label}</div>
-                      <div className="text-xs mt-0.5" style={{ color: C.textMid }}>{cfg.description}</div>
-                      <div className="mt-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-sm" style={{ color: C.textDark }}>{cfg.label}</div>
                         {available === null ? (
-                          <span className="text-xs" style={{ color: C.textLight }}>확인 중...</span>
+                          <span className="text-xs" style={{ color: C.textLight }}>…</span>
                         ) : available ? (
-                          <span className="text-xs text-emerald-600">● 사용 가능</span>
+                          <span className="text-xs text-emerald-600">●</span>
                         ) : (
-                          <span className="text-xs text-red-400">● 미설정</span>
+                          <span className="text-xs text-red-400">●</span>
                         )}
                       </div>
+                      <div className="text-xs mt-0.5 mb-2" style={{ color: C.textMid }}>{cfg.description}</div>
+
+                      {/* 스펙 배지 */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>품질</span>
+                          <div className="flex gap-px">{dotRow(currentModel.quality, C.accent)}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>속도</span>
+                          <div className="flex gap-px">{dotRow(currentModel.speed, C.amber)}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>비용</span>
+                          <div className="flex gap-px">{dotRow(currentModel.cost, '#4ade80')}</div>
+                        </div>
+                      </div>
+
                       {isSelected && cfg.models.length > 1 && (
                         <select
                           value={selectedModels[provider]}
@@ -1202,9 +1237,16 @@ export default function WorkflowPage() {
         {/* Step: Select Ideas */}
         {step === 'select-ideas' && (
           <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
-            <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
-              진행할 아이디어를 선택해주세요
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xl font-semibold" style={{ color: C.textDark }}>
+                진행할 아이디어를 선택해주세요
+              </h2>
+              {lastGenTime && (
+                <span className="text-xs px-2.5 py-1 rounded-full" style={{ backgroundColor: C.cream, color: C.textMid }}>
+                  ⚡ {lastGenTime.label}으로 {formatTime(lastGenTime.seconds)} 만에 생성
+                </span>
+              )}
+            </div>
             <p className="text-sm mb-6" style={{ color: C.textMid }}>
               상세 사업기획서를 작성할 아이디어를 선택하세요. (복수 선택 가능)
             </p>
@@ -1369,9 +1411,16 @@ export default function WorkflowPage() {
             {/* Current Plan */}
             <div>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-xl font-bold" style={{ color: C.textDark }}>
-                  {businessPlans[currentPlanIndex].ideaName}
-                </h2>
+                <div>
+                  <h2 className="text-xl font-bold" style={{ color: C.textDark }}>
+                    {businessPlans[currentPlanIndex].ideaName}
+                  </h2>
+                  {lastGenTime && (
+                    <span className="text-xs mt-1 inline-block" style={{ color: C.textLight }}>
+                      ⚡ {lastGenTime.label}으로 {formatTime(lastGenTime.seconds)} 만에 생성
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
                   className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition"
