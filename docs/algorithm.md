@@ -193,16 +193,40 @@ rankedList[1].rankedKeyword (risingQueries — 성장률 기준)
 - 실패해도 빈 배열 반환 — 기존 흐름 유지 (비공식 패키지라 차단 가능성 있음)
 - 패키지: `google-trends-api@4.9.2`
 
+#### 1-1-D. Product Hunt 트렌딩 제품 (`/api/producthunt`)
+
+Product Hunt GraphQL API v2로 최근 30일 트렌딩 제품 수집:
+
+**데이터 흐름**:
+
+```
+POST https://api.producthunt.com/v2/api/graphql
+  { order: VOTES, postedAfter: -30일, first: 50 }
+    ↓
+키워드 관련성 필터:
+  - name·tagline·topics에 키워드 포함 여부 검사
+  - 한국어 키워드는 MyMemory API로 영어 번역 후 검색
+  - 매칭 없으면 상위 득표 제품으로 폴백 (최대 6개)
+    ↓
+SearchResult[] 변환:
+  title   → "Product Hunt 트렌딩: {name}"
+  url     → 제품 URL
+  snippet → '"{tagline}" — 👍 {votesCount}표 (최근 30일 트렌딩)'
+```
+
+- 인증: `PRODUCT_HUNT_API_KEY` (Developer Token, 무료)
+- 실패해도 빈 배열 반환 — 기존 흐름 유지
+
 ### 1-2. LLM 호출 (`/api/generate`, `type: 'generate-ideas'`)
 
 **데이터 흐름:**
 
 ```
-클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, trendsResults, provider, model }
+클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, trendsResults, productHuntResults, provider, model }
     ↓
 서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
     ↓
-createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults)
+createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults)
     ↓
 LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ```
@@ -370,6 +394,7 @@ LLM 호출
 | `app/src/app/api/search/route.ts` | Tavily 검색 |
 | `app/src/app/api/reddit/route.ts` | Reddit 페인포인트 검색 (PullPush.io) |
 | `app/src/app/api/trends/route.ts` | Google Trends 급등 신호 수집 (google-trends-api) |
+| `app/src/app/api/producthunt/route.ts` | Product Hunt 트렌딩 제품 수집 (GraphQL API v2) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |

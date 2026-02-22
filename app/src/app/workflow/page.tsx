@@ -185,6 +185,20 @@ export default function WorkflowPage() {
     }
   }
 
+  async function searchProductHunt(kw: string): Promise<SearchResult[]> {
+    try {
+      const res = await fetch('/api/producthunt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: kw || '' }),
+      });
+      if (!res.ok) return [];
+      return ((await res.json()).results || []) as SearchResult[];
+    } catch {
+      return [];
+    }
+  }
+
   async function generateIdeas() {
     setIsLoading(true);
     setError(null);
@@ -198,15 +212,16 @@ export default function WorkflowPage() {
     startTimer(timings.ideaSearch + timings.ideaLLM);
 
     try {
-      // Step 1: 시장 조사(Tavily) + Reddit 페인포인트 + Google Trends 급등 신호 병렬 수집
+      // Step 1: 시장 조사(Tavily) + Reddit + Google Trends + Product Hunt 병렬 수집
       let searchData: SearchResult[] = [];
       let redditData: SearchResult[] = [];
       let trendsData: SearchResult[] = [];
-      setLoadingMessage('시장 조사 + Reddit + Google Trends 급등 신호 수집 중...');
+      let productHuntData: SearchResult[] = [];
+      setLoadingMessage('시장 조사 + Reddit + Google Trends + Product Hunt 수집 중...');
       const searchStart = Date.now();
       try {
         const base = keyword || 'SaaS AI 에이전트';
-        [searchData, redditData, trendsData] = await Promise.all([
+        [searchData, redditData, trendsData, productHuntData] = await Promise.all([
           searchMultiple([
             `${base} SaaS 시장 규모 성장률 트렌드 2025`,
             `${base} B2B B2C 솔루션 스타트업 투자 기회`,
@@ -214,6 +229,7 @@ export default function WorkflowPage() {
           ]),
           searchReddit(keyword || 'SaaS startup'),
           searchTrends(keyword || 'SaaS'),
+          searchProductHunt(keyword || ''),
         ]);
         setSearchResults(searchData);
       } catch (searchErr) {
@@ -222,7 +238,7 @@ export default function WorkflowPage() {
       updateStoredTiming('ideaSearch', Date.now() - searchStart);
       setProgressCurrent(1);
       setCompletedSteps([
-        `시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 + 급등 트렌드 ${trendsData.length}건 수집 완료`,
+        `시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 + 급등 트렌드 ${trendsData.length}건 + Product Hunt ${productHuntData.length}건 수집 완료`,
       ]);
       updateEta(timings.ideaLLM);
 
@@ -242,6 +258,7 @@ export default function WorkflowPage() {
           searchResults: searchData,
           redditResults: redditData,
           trendsResults: trendsData,
+          productHuntResults: productHuntData,
         }),
       });
 

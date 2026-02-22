@@ -8,7 +8,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[]): string {
+export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[], productHuntResults?: SearchResult[]): string {
   const keywordPart = keyword ? `"${keyword}" 관련` : '';
 
   let searchContext = '';
@@ -51,6 +51,19 @@ ${trendsResults.map((r, i) => `${i + 1}. **${r.title.replace('급등 트렌드: 
 `;
   }
 
+  let productHuntContext = '';
+  if (productHuntResults && productHuntResults.length > 0) {
+    productHuntContext = `
+## Product Hunt 트렌딩 제품 (최근 30일)
+다음은 최근 Product Hunt에서 주목받고 있는 실제 출시 제품들입니다.
+이 제품들이 해결하는 문제, 접근 방식, 시장 수요를 아이디어 발굴에 참고하세요:
+
+${productHuntResults.map((r, i) => `${i + 1}. **${r.title.replace('Product Hunt 트렌딩: ', '')}** (${r.url})
+   - ${r.snippet}`).join('\n\n')}
+
+`;
+  }
+
   const criteriaSection = criteria
     ? `## 아이디어 발굴 기준\n${criteria}`
     : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
@@ -64,7 +77,7 @@ ${trendsResults.map((r, i) => `${i + 1}. **${r.title.replace('급등 트렌드: 
 - rationale 필드는 검색 자료 [번호]를 인용하여 근거를 제시하세요.
 
 ${criteriaSection}
-${searchContext}${redditContext}${trendsContext}
+${searchContext}${redditContext}${trendsContext}${productHuntContext}
 위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} SaaS/Agent 아이디어 3개를 아래 JSON 형식으로 출력하세요.
 각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
 
