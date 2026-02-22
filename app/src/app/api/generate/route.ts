@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
     const isLongDoc = type === 'business-plan' || type === 'generate-prd' ||
       type === 'full-plan-market' || type === 'full-plan-competition' ||
       type === 'full-plan-strategy' || type === 'full-plan-finance';
-    const maxTokens = isLongDoc ? 16000 : 8192;
+    // generate-ideas는 JSON 3개 + 긴 rationale 포함으로 12000 토큰 필요
+    const maxTokens = isLongDoc ? 16000 : type === 'generate-ideas' ? 12000 : 8192;
     let response: string;
 
     switch (provider) {
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
         response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
         break;
       case 'gemini':
-        response = await generateWithGemini(model || 'gemini-2.0-flash', prompt, maxTokens);
+        response = await generateWithGemini(model || 'gemini-2.0-flash', prompt, maxTokens, jsonMode);
         break;
       case 'openai':
         response = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
@@ -151,9 +152,12 @@ async function generateWithClaude(model: string, prompt: string, maxTokens: numb
   return data.content[0].text;
 }
 
-async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
+async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192, jsonMode: boolean = false): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
+
+  const generationConfig: Record<string, unknown> = { maxOutputTokens: maxTokens };
+  if (jsonMode) generationConfig.responseMimeType = 'application/json';
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -162,7 +166,7 @@ async function generateWithGemini(model: string, prompt: string, maxTokens: numb
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens },
+        generationConfig,
       }),
     }
   );
