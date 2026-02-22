@@ -190,7 +190,25 @@ async function generateWithGemini(model: string, prompt: string, maxTokens: numb
   }
 
   const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
+  const candidate = data.candidates?.[0];
+  if (!candidate) throw new Error('Gemini API: 응답에 candidates가 없습니다.');
+
+  const text: string = candidate.content?.parts?.[0]?.text ?? '';
+  const finishReason: string = candidate.finishReason ?? 'STOP';
+  const usedTokens: number = data.usageMetadata?.candidatesTokenCount ?? 0;
+
+  // 토큰 한도 초과로 잘린 경우 — 본문 뒤에 경고 삽입
+  if (finishReason === 'MAX_TOKENS') {
+    return (
+      text +
+      `\n\n---\n` +
+      `> ⚠️ **출력 잘림 (MAX_TOKENS)**: \`${model}\` 모델이 출력 토큰 한도에 도달해 내용이 중간에 잘렸습니다.\n` +
+      `> 사용된 출력 토큰: **${usedTokens}** / 요청 한도: **${maxTokens}**\n` +
+      `> **해결 방법**: Gemini Pro 모델 또는 Claude/OpenAI로 전환하면 전체 내용을 받을 수 있습니다.`
+    );
+  }
+
+  return text;
 }
 
 async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<string> {
