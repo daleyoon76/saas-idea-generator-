@@ -157,6 +157,20 @@ export default function WorkflowPage() {
     });
   }
 
+  async function searchReddit(kw: string): Promise<SearchResult[]> {
+    try {
+      const res = await fetch('/api/reddit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: kw || 'SaaS startup' }),
+      });
+      if (!res.ok) return [];
+      return ((await res.json()).results || []) as SearchResult[];
+    } catch {
+      return [];
+    }
+  }
+
   async function generateIdeas() {
     setIsLoading(true);
     setError(null);
@@ -170,16 +184,20 @@ export default function WorkflowPage() {
     startTimer(timings.ideaSearch + timings.ideaLLM);
 
     try {
-      // Step 1: Search for market trends (parallel multi-query)
+      // Step 1: Search for market trends (Tavily) + Reddit pain points in parallel
       let searchData: SearchResult[] = [];
-      setLoadingMessage('시장 규모·트렌드 조사 중...');
+      let redditData: SearchResult[] = [];
+      setLoadingMessage('시장 조사 + Reddit 페인포인트 수집 중...');
       const searchStart = Date.now();
       try {
         const base = keyword || 'SaaS AI 에이전트';
-        searchData = await searchMultiple([
-          `${base} SaaS 시장 규모 성장률 트렌드 2025`,
-          `${base} B2B B2C 솔루션 스타트업 투자 기회`,
-          `${base} AI 자동화 에이전트 적용 사례 2025`,
+        [searchData, redditData] = await Promise.all([
+          searchMultiple([
+            `${base} SaaS 시장 규모 성장률 트렌드 2025`,
+            `${base} B2B B2C 솔루션 스타트업 투자 기회`,
+            `${base} AI 자동화 에이전트 적용 사례 2025`,
+          ]),
+          searchReddit(keyword || 'SaaS startup'),
         ]);
         setSearchResults(searchData);
       } catch (searchErr) {
@@ -187,7 +205,7 @@ export default function WorkflowPage() {
       }
       updateStoredTiming('ideaSearch', Date.now() - searchStart);
       setProgressCurrent(1);
-      setCompletedSteps([`시장 자료 ${searchData.length}건 수집 완료`]);
+      setCompletedSteps([`시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 수집 완료`]);
       updateEta(timings.ideaLLM);
 
       // Step 2: Generate ideas with search context
@@ -204,6 +222,7 @@ export default function WorkflowPage() {
           type: 'generate-ideas',
           keyword: keyword || undefined,
           searchResults: searchData,
+          redditResults: redditData,
         }),
       });
 

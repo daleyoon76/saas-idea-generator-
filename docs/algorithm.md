@@ -34,7 +34,7 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
 
 | `type` | 서버 동작 | 클라이언트 전송 필드 |
 |--------|-----------|-------------------|
-| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults` |
+| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults` |
 | `business-plan` | `bizplan-template.md` 읽기 → `createBusinessPlanPrompt()` 호출 | `idea`, `searchResults` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
@@ -53,27 +53,33 @@ Tavily 검색(1-1)과 LLM 생성(1-2) 전에 **외부 트렌드 DB**에서 신�
 
 **공식 소개**: "Discover trends before they take off. See new market opportunities, trending topics, emerging technology, and hot startups."
 
-**공식 공개 작동 방식** (semrush.com/lp/exploding-topics-pricing/en 확인):
+**공식 공개 데이터 소스** (explodingtopics.com 및 관련 페이지 확인):
+- Google, Reddit, Amazon, 소셜미디어, 포럼, 뉴스 등 수십 개 플랫폼의 소비자 신호 분석
+- DB 규모: 1.1M+ 트렌드, 매일 업데이트
+
+**공식 공개 작동 방식**:
 
 ```
-수십 개 플랫폼의 소비자 신호 분석 (구체적 소스는 비공개)
+수십 개 플랫폼의 소비자 신호 수집
     ↓
-트렌드 감지 알고리즘 적용 (알고리즘 상세 비공개)
+급등 패턴 감지 알고리즘 적용 (일시적 바이럴 vs 지속 성장 구분)
     ↓
-수동 데이터 확인 및 트렌드 검증 (휴먼 큐레이션)
+역사적 데이터 교차 검증 + 휴먼 큐레이션
+    ↓
+Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 ```
 
-> ⚠️ 데이터 소스 목록, 알고리즘 상세, 업데이트 주기 등은 공식 페이지에서 공개되지 않음.
+> ⚠️ 알고리즘 상세, 구체적 소스 목록은 공식 페이지에서 비공개.
 
 **플랜 및 주요 기능** (공식 가격 페이지 기준):
 
 | 플랜 | 가격 | 트렌드 추적 | 주요 기능 |
 |------|------|------------|---------|
 | Entrepreneur | $39/월 | 100개 | 트렌드 DB, 트렌딩 상품, 메타 트렌드, 채널별 분석 |
-| Investor | $99/월 | 500개 | + 신흥 스타트업 추적, 트렌드 예측, CSV 내보내기 |
-| Business | $249/월 | 2,000개 | + 트렌드 리포트 |
+| Investor | $99/월 | 500개 | + 신흥 스타트업 추적, Future Forecast, CSV 내보내기 |
+| Business | $249/월 | 2,000개 | + 트렌드 리포트, API 접근 (엔드포인트 비공개) |
 
-> ⚠️ API 접근 여부는 공식 가격 페이지에 명시되지 않음.
+> ⚠️ API는 Business 플랜($249/월) 전용, 엔드포인트 비공개 → **현재 미구현**
 
 **SaaS 기획 활용 포인트**:
 - 주류화되기 전 급성장 키워드를 사전 발굴하는 용도
@@ -111,7 +117,11 @@ Tavily 검색(1-1)과 LLM 생성(1-2) 전에 **외부 트렌드 DB**에서 신�
 
 ---
 
-### 1-1. 인터넷 검색 (`/api/search`)
+### 1-1. 검색 (Tavily + Reddit 병렬)
+
+Tavily 시장 조사와 Reddit 페인포인트 수집을 **동시에** 실행한다.
+
+#### 1-1-A. Tavily 시장 조사 (`/api/search`)
 
 병렬 3개 쿼리 동시 실행 후 URL 기준 중복 제거:
 
@@ -126,16 +136,48 @@ Tavily 검색(1-1)과 LLM 생성(1-2) 전에 **외부 트렌드 DB**에서 신�
 - 검색 깊이: `basic`
 - 실패해도 다음 단계 계속 진행
 
+#### 1-1-B. Reddit 페인포인트 수집 (`/api/reddit`)
+
+PullPush.io API(무료, 인증 불필요)를 사용해 4개 서브레딧에서 병렬 검색:
+
+**검색 대상 서브레딧**: `entrepreneur`, `SaaS`, `startups`, `smallbusiness`
+
+**PullPush API 파라미터**:
+
+| 파라미터 | 값 | 의미 |
+|----------|-----|------|
+| `q` | 키워드 | 검색어 |
+| `subreddit` | (서브레딧명) | 검색 범위 |
+| `score` | `>10` | 업보트 10 이상 (검증된 공감대) |
+| `size` | `3` | 서브레딧당 최대 3개 |
+| `after` | `365d` | 최근 1년 이내 |
+
+**데이터 흐름**:
+
+```
+4개 서브레딧 병렬 호출 (subreddit당 size: 3)
+    ↓
+SearchResult[] 매핑:
+  title   → post.title
+  url     → "https://reddit.com" + post.permalink
+  snippet → post.selftext[:200] (없으면 title 반복)
+    ↓
+URL 중복 제거 → 최대 12개 결과 반환
+```
+
+- 실패 시 `{ results: [] }` 반환 — 기존 흐름 유지
+- 타임아웃: 8초 (`AbortSignal.timeout(8000)`)
+
 ### 1-2. LLM 호출 (`/api/generate`, `type: 'generate-ideas'`)
 
 **데이터 흐름:**
 
 ```
-클라이언트: { type: 'generate-ideas', keyword, searchResults, provider, model }
+클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, provider, model }
     ↓
 서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
     ↓
-createIdeaGenerationPrompt(keyword, searchResults, criteria)
+createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults)
     ↓
 LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ```
@@ -149,7 +191,10 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 [criteria.md 전체 내용 — R10 5대 기준]
 
 ## 참고할 시장 조사 자료
-[검색 결과 컨텍스트 - 제목/URL/내용 최대 5개]
+[Tavily 검색 결과 컨텍스트 - 제목/URL/내용]
+
+## Reddit 커뮤니티 페인포인트
+[Reddit 검색 결과 - 제목/URL/본문 발췌 (200자)]
 
 위 발굴 기준과 시장 환경을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를
 아래 JSON 형식으로 출력하세요.
@@ -298,6 +343,7 @@ LLM 호출
 | `app/src/app/workflow/page.tsx` | 전체 워크플로우 상태머신 (클라이언트) |
 | `app/src/app/api/generate/route.ts` | LLM 라우팅 + 프롬프트 조립 (서버) |
 | `app/src/app/api/search/route.ts` | Tavily 검색 |
+| `app/src/app/api/reddit/route.ts` | Reddit 페인포인트 검색 (PullPush.io) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |

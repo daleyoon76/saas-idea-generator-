@@ -8,7 +8,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string): string {
+export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[]): string {
   const keywordPart = keyword ? `"${keyword}" 관련` : '';
 
   let searchContext = '';
@@ -26,6 +26,19 @@ ${searchResults.map((r, i) => `${i + 1}. **${r.title}**
 `;
   }
 
+  let redditContext = '';
+  if (redditResults && redditResults.length > 0) {
+    redditContext = `
+## Reddit 커뮤니티 페인포인트
+다음은 Reddit에서 실제 창업자·사용자들이 불편함을 토로한 글입니다.
+이 페인포인트를 해결하는 방향을 아이디어 발굴에 반영하세요:
+
+${redditResults.map((r, i) => `${i + 1}. **${r.title}** (출처: ${r.url})
+   - ${r.snippet}`).join('\n\n')}
+
+`;
+  }
+
   const criteriaSection = criteria
     ? `## 아이디어 발굴 기준\n${criteria}`
     : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
@@ -39,7 +52,7 @@ ${searchResults.map((r, i) => `${i + 1}. **${r.title}**
 - rationale 필드는 검색 자료 [번호]를 인용하여 근거를 제시하세요.
 
 ${criteriaSection}
-${searchContext}
+${searchContext}${redditContext}
 위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} SaaS/Agent 아이디어 3개를 아래 JSON 형식으로 출력하세요.
 각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
 
