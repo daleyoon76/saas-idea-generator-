@@ -8,7 +8,7 @@ interface SearchResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const { query, count = 5 } = await request.json();
+    const { query, count = 5, depth = 'basic' } = await request.json();
 
     if (!query) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 });
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         api_key: apiKey,
         query,
         max_results: count,
-        search_depth: 'basic',
+        search_depth: depth === 'advanced' ? 'advanced' : 'basic',
       }),
     });
 

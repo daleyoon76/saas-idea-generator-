@@ -1,9 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+// 단계별 기본 예상 소요 시간 (ms) — localStorage에 실측값이 쌓이면 자동으로 갱신됨
+const DEFAULT_STEP_MS = {
+  ideaSearch: 7000,   // Tavily 병렬 2회
+  ideaLLM: 20000,     // Claude Sonnet 아이디어 생성
+  planSearch: 9000,   // Tavily 병렬 3회
+  planLLM: 75000,     // Claude Sonnet 사업기획서
+};
+const TIMING_KEY = 'saas-generator-step-timings';
+
+function getStoredTimings(): typeof DEFAULT_STEP_MS {
+  if (typeof window === 'undefined') return { ...DEFAULT_STEP_MS };
+  try {
+    const raw = localStorage.getItem(TIMING_KEY);
+    if (raw) return { ...DEFAULT_STEP_MS, ...JSON.parse(raw) };
+  } catch {}
+  return { ...DEFAULT_STEP_MS };
+}
+
+function updateStoredTiming(key: keyof typeof DEFAULT_STEP_MS, durationMs: number) {
+  try {
+    const current = getStoredTimings();
+    // 가중 이동평균: 과거 70% + 실측 30%
+    current[key] = Math.round(current[key] * 0.7 + durationMs * 0.3);
+    localStorage.setItem(TIMING_KEY, JSON.stringify(current));
+  } catch {}
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}분 ${s.toString().padStart(2, '0')}초` : `${s}초`;
+}
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
 import { Idea, BusinessPlan, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 
@@ -29,6 +62,11 @@ export default function WorkflowPage() {
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(2);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  const processStartRef = useRef<number | null>(null);
+  const expectedEndRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [dirName, setDirName] = useState('다운로드');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -36,7 +74,32 @@ export default function WorkflowPage() {
 
   useEffect(() => {
     checkProviders();
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
+  function startTimer(initialEtaMs: number) {
+    const now = Date.now();
+    processStartRef.current = now;
+    expectedEndRef.current = now + initialEtaMs;
+    setElapsedSeconds(0);
+    setEtaSeconds(Math.ceil(initialEtaMs / 1000));
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      const t = Date.now();
+      setElapsedSeconds(Math.floor((t - (processStartRef.current ?? t)) / 1000));
+      const remaining = (expectedEndRef.current ?? t) - t;
+      setEtaSeconds(remaining > 0 ? Math.ceil(remaining / 1000) : 0);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+
+  function updateEta(remainingMs: number) {
+    expectedEndRef.current = Date.now() + remainingMs;
+    setEtaSeconds(Math.ceil(remainingMs / 1000));
+  }
 
   async function checkProviders() {
     try {
@@ -57,14 +120,14 @@ export default function WorkflowPage() {
     return availableProviders[selectedProvider] === true;
   }
 
-  async function searchMultiple(queries: string[], countEach: number = 4): Promise<SearchResult[]> {
+  async function searchMultiple(queries: string[], countEach: number = 4, depth: 'basic' | 'advanced' = 'basic'): Promise<SearchResult[]> {
     const allResults = await Promise.all(
       queries.map(async (q) => {
         try {
           const res = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, count: countEach }),
+            body: JSON.stringify({ query: q, count: countEach, depth }),
           });
           if (!res.ok) return [];
           const data = await res.json();
@@ -91,26 +154,34 @@ export default function WorkflowPage() {
     setProgressTotal(2);
     setCompletedSteps([]);
 
+    const timings = getStoredTimings();
+    startTimer(timings.ideaSearch + timings.ideaLLM);
+
     try {
       // Step 1: Search for market trends (parallel multi-query)
       let searchData: SearchResult[] = [];
       setLoadingMessage('시장 규모·트렌드 조사 중...');
+      const searchStart = Date.now();
       try {
         const base = keyword || 'SaaS AI 에이전트';
         searchData = await searchMultiple([
           `${base} SaaS 시장 규모 성장률 트렌드 2025`,
           `${base} B2B B2C 솔루션 스타트업 투자 기회`,
+          `${base} AI 자동화 에이전트 적용 사례 2025`,
         ]);
         setSearchResults(searchData);
       } catch (searchErr) {
         console.log('Search failed, continuing without search results:', searchErr);
       }
+      updateStoredTiming('ideaSearch', Date.now() - searchStart);
       setProgressCurrent(1);
       setCompletedSteps([`시장 자료 ${searchData.length}건 수집 완료`]);
+      updateEta(timings.ideaLLM);
 
       // Step 2: Generate ideas with search context
       // 프롬프트 구성은 서버(api/generate)에서 app/src/assets/criteria.md를 읽어 처리
       setLoadingMessage('AI가 아이디어 3개를 생성하는 중...');
+      const llmStart = Date.now();
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -233,6 +304,8 @@ export default function WorkflowPage() {
         ]);
       }
 
+      updateStoredTiming('ideaLLM', Date.now() - llmStart);
+      setProgressCurrent(2);
       setStep('select-ideas');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -240,6 +313,7 @@ export default function WorkflowPage() {
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
+      stopTimer();
     }
   }
 
@@ -254,31 +328,43 @@ export default function WorkflowPage() {
     setProgressTotal(selectedIdeas.length * 2);
     setCompletedSteps([]);
 
+    const timings = getStoredTimings();
+    startTimer(selectedIdeas.length * (timings.planSearch + timings.planLLM));
+
     try {
       const plans: BusinessPlan[] = [];
+      let completedIdeas = 0;
 
       for (const ideaId of selectedIdeas) {
         const idea = ideas.find((i) => i.id === ideaId);
         if (!idea) continue;
 
+        const remainingIdeas = selectedIdeas.length - completedIdeas;
+
         // Step 1: Search for relevant market data (parallel multi-query)
         setLoadingMessage(`"${idea.name}" 관련 시장 조사 중...`);
+        const planSearchStart = Date.now();
         let planSearchResults: SearchResult[] = [];
         try {
           planSearchResults = await searchMultiple([
             `${idea.name} 경쟁사 대안 솔루션 비교`,
             `${idea.target} 고객 페인포인트 문제점 수요`,
-            `${idea.category || 'SaaS'} 시장 규모 TAM 투자 트렌드 2025`,
-          ], 3);
+            `${idea.category || 'SaaS'} 시장 규모 TAM SAM SOM 투자 트렌드 2025`,
+            `${idea.name} SaaS 가격 책정 수익 모델 사례`,
+            `${idea.name} 규제 법률 리스크 진입 장벽`,
+          ], 3, 'advanced');
         } catch (searchErr) {
           console.log('Search failed for business plan:', searchErr);
         }
+        updateStoredTiming('planSearch', Date.now() - planSearchStart);
         setProgressCurrent(prev => prev + 1);
         setCompletedSteps(prev => [...prev, `"${idea.name}" 시장 자료 ${planSearchResults.length}건 수집 완료`]);
+        updateEta(timings.planLLM + (remainingIdeas - 1) * (timings.planSearch + timings.planLLM));
 
         // Step 2: Generate business plan with search context
         // 프롬프트 구성은 서버(api/generate)에서 docs/bizplan-template.md를 읽어 처리
         setLoadingMessage(`"${idea.name}" 사업기획서 작성 중...`);
+        const planLLMStart = Date.now();
 
         const res = await fetch('/api/generate', {
           method: 'POST',
@@ -298,14 +384,17 @@ export default function WorkflowPage() {
 
         const data = await res.json();
 
+        updateStoredTiming('planLLM', Date.now() - planLLMStart);
         plans.push({
           ideaId: idea.id,
           ideaName: idea.name,
           content: data.response,
           createdAt: new Date().toISOString(),
         });
+        completedIdeas += 1;
         setProgressCurrent(prev => prev + 1);
         setCompletedSteps(prev => [...prev, `"${idea.name}" 사업기획서 작성 완료`]);
+        updateEta((selectedIdeas.length - completedIdeas) * (timings.planSearch + timings.planLLM));
       }
 
       setBusinessPlans(plans);
@@ -317,6 +406,7 @@ export default function WorkflowPage() {
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
+      stopTimer();
     }
   }
 
@@ -337,23 +427,123 @@ export default function WorkflowPage() {
 
   async function buildDocxBlob(plan: BusinessPlan): Promise<Blob> {
     const lines = plan.content.split('\n');
-    const children: Paragraph[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const children: any[] = [];
+    let i = 0;
 
-    for (const line of lines) {
-      if (line.startsWith('## ')) {
-        children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_1 }));
-      } else if (line.startsWith('### ')) {
-        children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_2 }));
-      } else if (line.startsWith('#### ')) {
-        children.push(new Paragraph({ text: line.slice(5), heading: HeadingLevel.HEADING_3 }));
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // H1: # 제목 (## 아님)
+      if (/^# /.test(line) && !/^##/.test(line)) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(2), bold: true, size: 36, color: '111827' })],
+          spacing: { before: 400, after: 200 },
+        }));
+        i++;
+
+      // H2: ## → 짙은 슬레이트 배경 + 흰 글자 (브라우저: bg-slate-700 #334155)
+      } else if (/^## /.test(line) && !/^###/.test(line)) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(3), color: 'FFFFFF', bold: true, size: 28 })],
+          shading: { type: ShadingType.SOLID, color: '334155', fill: '334155' },
+          spacing: { before: 480, after: 160 },
+          indent: { left: 160, right: 160 },
+        }));
+        i++;
+
+      // H3: ### → 파란 좌측 보더 (브라우저: border-l-4 border-blue-500 text-blue-800)
+      } else if (/^### /.test(line) && !/^####/.test(line)) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(4), color: '1E40AF', bold: true, size: 24 })],
+          border: { left: { style: BorderStyle.SINGLE, size: 24, color: '3B82F6', space: 8 } },
+          indent: { left: 180 },
+          spacing: { before: 280, after: 80 },
+        }));
+        i++;
+
+      // H4: #### → 회색 좌측 보더 (브라우저: border-l-4 border-gray-400)
+      } else if (/^#### /.test(line)) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line.slice(5), color: '374151', bold: true, size: 22 })],
+          border: { left: { style: BorderStyle.SINGLE, size: 12, color: '9CA3AF', space: 8 } },
+          indent: { left: 160 },
+          spacing: { before: 200, after: 60 },
+        }));
+        i++;
+
+      // 표: | 가 있고 다음 줄이 구분선(|---|---|)인 경우
+      } else if (line.includes('|') && /^\s*\|[\s\-:|]+\|\s*$/.test(lines[i + 1] || '')) {
+        const headerCells = line.split('|').slice(1, -1).map(c => c.trim());
+        const colCount = headerCells.length;
+        i += 2; // 헤더 + 구분선 건너뜀
+        const bodyRows: string[][] = [];
+        while (i < lines.length && lines[i].includes('|')) {
+          bodyRows.push(lines[i].split('|').slice(1, -1).map(c => c.trim()));
+          i++;
+        }
+        const table = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              tableHeader: true,
+              children: headerCells.map(text => new TableCell({
+                shading: { fill: 'E2E8F0', type: ShadingType.SOLID, color: 'auto' },
+                children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 20 })] })],
+              })),
+            }),
+            ...bodyRows.map(row => {
+              const cells = [...row];
+              while (cells.length < colCount) cells.push('');
+              return new TableRow({
+                children: cells.slice(0, colCount).map(text => new TableCell({
+                  children: [new Paragraph({ children: parseInlineText(text), spacing: { after: 60 } })],
+                })),
+              });
+            }),
+          ],
+        });
+        children.push(table);
+        children.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+
+      // 불릿 리스트
       } else if (/^[-*] /.test(line)) {
-        children.push(new Paragraph({ children: parseInlineText(line.slice(2)), bullet: { level: 0 } }));
+        children.push(new Paragraph({
+          children: parseInlineText(line.slice(2)),
+          bullet: { level: 0 },
+          spacing: { after: 60 },
+        }));
+        i++;
+
+      // 번호 리스트
       } else if (/^\d+\. /.test(line)) {
-        children.push(new Paragraph({ children: parseInlineText(line.replace(/^\d+\. /, '')), numbering: { reference: 'default-numbering', level: 0 } }));
+        children.push(new Paragraph({
+          children: parseInlineText(line.replace(/^\d+\. /, '')),
+          numbering: { reference: 'default-numbering', level: 0 },
+          spacing: { after: 60 },
+        }));
+        i++;
+
+      // 수평선
+      } else if (line.trim() === '---') {
+        children.push(new Paragraph({
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'E5E7EB', space: 1 } },
+          spacing: { before: 240, after: 240 },
+        }));
+        i++;
+
+      // 빈 줄
       } else if (line.trim() === '') {
-        children.push(new Paragraph({ text: '' }));
+        children.push(new Paragraph({ text: '', spacing: { after: 80 } }));
+        i++;
+
+      // 일반 텍스트
       } else {
-        children.push(new Paragraph({ children: parseInlineText(line) }));
+        children.push(new Paragraph({
+          children: parseInlineText(line),
+          spacing: { after: 100 },
+        }));
+        i++;
       }
     }
 
@@ -397,8 +587,8 @@ export default function WorkflowPage() {
     setShowSaveDialog(false);
     const blob = await buildDocxBlob(pendingPlan);
     const fileName = keyword
-      ? `사업기획안_${keyword}_${pendingPlan.ideaName}.docx`
-      : `사업기획안_${pendingPlan.ideaName}.docx`;
+      ? `사업기획서_${keyword}_${pendingPlan.ideaName}.docx`
+      : `사업기획서_${pendingPlan.ideaName}.docx`;
     if (dirHandle) {
       try {
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
@@ -415,6 +605,7 @@ export default function WorkflowPage() {
   }
 
   function reset() {
+    stopTimer();
     setStep('keyword');
     setKeyword('');
     setIdeas([]);
@@ -576,7 +767,23 @@ export default function WorkflowPage() {
         {/* Step: Generating Ideas */}
         {step === 'generating-ideas' && (
           <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-6 text-gray-900">아이디어 발굴 중</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">아이디어 발굴 중</h2>
+
+            {/* Time info */}
+            <div className="flex gap-8 mb-5">
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
+                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+              </div>
+              {etaSeconds !== null && (
+                <div>
+                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
+                  <div className="font-mono text-base font-semibold text-blue-600">
+                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
@@ -739,7 +946,23 @@ export default function WorkflowPage() {
         {/* Step: Generating Plan */}
         {step === 'generating-plan' && (
           <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-6 text-gray-900">사업기획서 작성 중</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">사업기획서 작성 중</h2>
+
+            {/* Time info */}
+            <div className="flex gap-8 mb-5">
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
+                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+              </div>
+              {etaSeconds !== null && (
+                <div>
+                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
+                  <div className="font-mono text-base font-semibold text-blue-600">
+                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
@@ -801,9 +1024,20 @@ export default function WorkflowPage() {
 
             {/* Current Plan */}
             <div>
-              <h2 className="text-2xl font-bold mb-4">
-                {businessPlans[currentPlanIndex].ideaName}
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">
+                  {businessPlans[currentPlanIndex].ideaName}
+                </h2>
+                <button
+                  onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  제일 아래로
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
               <div className="mb-6">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
@@ -870,12 +1104,21 @@ export default function WorkflowPage() {
                 </ReactMarkdown>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <button
                   onClick={reset}
                   className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                 >
                   새로 시작
+                </button>
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  제일 위로
                 </button>
                 <button
                   onClick={() => openSaveDialog(businessPlans[currentPlanIndex])}
@@ -898,7 +1141,7 @@ export default function WorkflowPage() {
             <div className="mb-4">
               <div className="text-xs text-gray-500 mb-1">파일명</div>
               <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-                {keyword ? `사업기획안_${keyword}_${pendingPlan.ideaName}.docx` : `사업기획안_${pendingPlan.ideaName}.docx`}
+                {keyword ? `사업기획서_${keyword}_${pendingPlan.ideaName}.docx` : `사업기획서_${pendingPlan.ideaName}.docx`}
               </div>
             </div>
 
