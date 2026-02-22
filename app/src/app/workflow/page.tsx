@@ -508,11 +508,23 @@ export default function WorkflowPage() {
   }
 
   async function buildDocxBlob(plan: BusinessPlan): Promise<Blob> {
+    // ── 캐니언 컬러 팔레트 (웹 UI와 동일) ─────────────────────────
+    const DC = {
+      textDark:  '3D1008',  // 다크 브라운
+      accent:    'C24B25',  // 테라코타
+      amber:     'F5901E',  // 앰버
+      cream:     'FDE8D0',  // 크림
+      border:    'F0D5C0',  // 연크림 보더
+      textMid:   '8B5A40',  // 미드 브라운
+      textLight: 'B08060',  // 라이트 브라운
+      white:     'FFFFFF',
+    };
+
     const lines = plan.content.split('\n');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const children: any[] = [];
 
-    // 문서 메타 정보 (생성 모델 + 일시)
+    // ── 문서 상단 메타 정보 ─────────────────────────────────────────
     const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(
       m => m.id === selectedModels[selectedProvider]
     )?.label ?? selectedModels[selectedProvider];
@@ -520,15 +532,15 @@ export default function WorkflowPage() {
     const createdAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
     children.push(new Paragraph({
       children: [
-        new TextRun({ text: `생성 모델: ${providerLabel} ${modelLabel}`, size: 18, color: '6B7280' }),
-        new TextRun({ text: `    |    생성 일시: ${createdAt}`, size: 18, color: '6B7280' }),
+        new TextRun({ text: `생성 모델: ${providerLabel} ${modelLabel}`, size: 18, color: DC.textLight }),
+        new TextRun({ text: `    |    생성 일시: ${createdAt}`, size: 18, color: DC.textLight }),
       ],
       spacing: { after: 40 },
     }));
     children.push(new Paragraph({
       children: [new TextRun({ text: '', size: 4 })],
-      border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' } },
-      spacing: { after: 200 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: DC.border } },
+      spacing: { after: 240 },
     }));
 
     let i = 0;
@@ -536,39 +548,40 @@ export default function WorkflowPage() {
     while (i < lines.length) {
       const line = lines[i];
 
-      // H1: # 제목 (## 아님)
+      // H1: # 제목 → 다크 브라운 대제목
       if (/^# /.test(line) && !/^##/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(2), bold: true, size: 36, color: '111827' })],
-          spacing: { before: 400, after: 200 },
+          children: [new TextRun({ text: line.slice(2), bold: true, size: 40, color: DC.textDark })],
+          spacing: { before: 400, after: 240 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: DC.accent, space: 6 } },
         }));
         i++;
 
-      // H2: ## → 짙은 슬레이트 배경 + 흰 글자 (브라우저: bg-slate-700 #334155)
+      // H2: ## → 테라코타 배경 + 흰 글자 (웹 UI의 섹션 헤더와 동일)
       } else if (/^## /.test(line) && !/^###/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(3), color: 'FFFFFF', bold: true, size: 28 })],
-          shading: { type: ShadingType.SOLID, color: '334155', fill: '334155' },
+          children: [new TextRun({ text: line.slice(3), color: DC.white, bold: true, size: 28 })],
+          shading: { type: ShadingType.SOLID, color: DC.accent, fill: DC.accent },
           spacing: { before: 480, after: 160 },
-          indent: { left: 160, right: 160 },
+          indent: { left: 200, right: 200 },
         }));
         i++;
 
-      // H3: ### → 파란 좌측 보더 (브라우저: border-l-4 border-blue-500 text-blue-800)
+      // H3: ### → 앰버 좌측 보더 + 다크 브라운 글자
       } else if (/^### /.test(line) && !/^####/.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(4), color: '1E40AF', bold: true, size: 24 })],
-          border: { left: { style: BorderStyle.SINGLE, size: 24, color: '3B82F6', space: 8 } },
-          indent: { left: 180 },
+          children: [new TextRun({ text: line.slice(4), color: DC.textDark, bold: true, size: 24 })],
+          border: { left: { style: BorderStyle.SINGLE, size: 24, color: DC.amber, space: 8 } },
+          indent: { left: 200 },
           spacing: { before: 280, after: 80 },
         }));
         i++;
 
-      // H4: #### → 회색 좌측 보더 (브라우저: border-l-4 border-gray-400)
+      // H4: #### → 크림 좌측 보더 + 미드 브라운 글자
       } else if (/^#### /.test(line)) {
         children.push(new Paragraph({
-          children: [new TextRun({ text: line.slice(5), color: '374151', bold: true, size: 22 })],
-          border: { left: { style: BorderStyle.SINGLE, size: 12, color: '9CA3AF', space: 8 } },
+          children: [new TextRun({ text: line.slice(5), color: DC.textMid, bold: true, size: 22 })],
+          border: { left: { style: BorderStyle.SINGLE, size: 12, color: DC.border, space: 8 } },
           indent: { left: 160 },
           spacing: { before: 200, after: 60 },
         }));
@@ -578,7 +591,7 @@ export default function WorkflowPage() {
       } else if (line.includes('|') && /^\s*\|[\s\-:|]+\|\s*$/.test(lines[i + 1] || '')) {
         const headerCells = line.split('|').slice(1, -1).map(c => c.trim());
         const colCount = headerCells.length;
-        i += 2; // 헤더 + 구분선 건너뜀
+        i += 2;
         const bodyRows: string[][] = [];
         while (i < lines.length && lines[i].includes('|')) {
           bodyRows.push(lines[i].split('|').slice(1, -1).map(c => c.trim()));
@@ -590,15 +603,21 @@ export default function WorkflowPage() {
             new TableRow({
               tableHeader: true,
               children: headerCells.map(text => new TableCell({
-                shading: { fill: 'E2E8F0', type: ShadingType.SOLID, color: 'auto' },
-                children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 20 })] })],
+                shading: { fill: DC.cream, type: ShadingType.SOLID, color: 'auto' },
+                children: [new Paragraph({
+                  children: [new TextRun({ text, bold: true, size: 20, color: DC.textDark })],
+                  spacing: { after: 60 },
+                })],
               })),
             }),
-            ...bodyRows.map(row => {
+            ...bodyRows.map((row, rowIdx) => {
               const cells = [...row];
               while (cells.length < colCount) cells.push('');
               return new TableRow({
                 children: cells.slice(0, colCount).map(text => new TableCell({
+                  shading: rowIdx % 2 === 1
+                    ? { fill: 'FDF5EE', type: ShadingType.SOLID, color: 'auto' }
+                    : undefined,
                   children: [new Paragraph({ children: parseInlineText(text), spacing: { after: 60 } })],
                 })),
               });
@@ -629,7 +648,7 @@ export default function WorkflowPage() {
       // 수평선
       } else if (line.trim() === '---') {
         children.push(new Paragraph({
-          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'E5E7EB', space: 1 } },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: DC.border, space: 1 } },
           spacing: { before: 240, after: 240 },
         }));
         i++;
