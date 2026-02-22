@@ -1039,8 +1039,14 @@ export default function WorkflowPage() {
           <div className="flex items-center gap-1">
             {['키워드 입력', '아이디어 선택', '기획서 작성', '완료'].map((label, idx) => {
               const stepOrder = ['keyword', 'select-ideas', 'view-plan', 'complete'];
-              const currentIdx = stepOrder.indexOf(step);
-              const isActive = idx <= currentIdx || step === 'generating-ideas' || step === 'generating-plan';
+              // 로딩 중인 스텝은 다음 스텝(도달 예정)으로 매핑
+              const effectiveStep =
+                step === 'generating-ideas' ? 'select-ideas' :
+                (step === 'generating-plan' || step === 'generating-full-plan' ||
+                 step === 'generating-prd' || step === 'view-prd' ||
+                 step === 'view-full-plan') ? 'view-plan' : step;
+              const currentIdx = stepOrder.indexOf(effectiveStep);
+              const isActive = idx <= currentIdx;
               return (
                 <div key={label} className="flex items-center">
                   <div className="flex flex-col items-center">
