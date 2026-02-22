@@ -11,9 +11,13 @@
 | 단계 1 | 키워드 받기 | ✅ 완료 |
 | 단계 2 | 기획팀장 — Tavily 시장 조사 | ✅ 완료 |
 | 단계 2 | 기획팀장 — Reddit 페인포인트 검색 (PullPush.io) | ✅ 완료 (한국어 키워드 자동 번역 포함) |
+| 단계 2 | 기획팀장 — Google Trends 급등 트렌드 수집 | ✅ 완료 |
+| 단계 2 | 기획팀장 — Product Hunt 트렌딩 제품 수집 | ✅ 완료 |
 | 단계 2 | Google Sheets 저장 | ❌ 미구현 (화면 표시만) |
 | 단계 3 | 의사결정 1 (아이디어 선택) | ✅ 완료 |
-| 단계 4 | 사업전략기획자 (기획서 작성) | ✅ 완료 (에이전트 팀 구조로 강화 예정) |
+| 단계 4 | 사업전략기획자 — 초안 (단일 LLM, 13개 섹션) | ✅ 완료 |
+| 단계 4 | 사업전략기획자 — **풀버전** (4-에이전트 순차 팀) | ✅ 완료 |
+| 단계 4 | PRD 자동 생성 (초안/풀버전 참조) | ✅ 완료 |
 | 단계 4 | Google Docs 저장 | ⚠️ .docx / .md 파일 다운로드로 대체 |
 | 단계 5 | 의사결정 2 (슬라이드 선택) | ❌ 미구현 |
 | 단계 6 | 슬라이드 생성 + Google Slides 저장 | ❌ 미구현 |
@@ -106,29 +110,34 @@
   - Default: **Google Gemini 3.0 Deep Research** _(현재: 단계 2와 동일한 모델 선택 UI 공유)_
   - 사용자가 모델을 선택 변경할 수 있도록 옵션 제공 ✅ 완료
 
-- **에이전트 팀 구조 (향후 구현 목표)**
-  - 현재 문제: 단일 LLM이 13개 섹션을 한 번에 생성 → 깊이 부족, 모델 의존성 과다
-  - 목표 구조: 섹션별 전문 에이전트가 각자 전용 검색 + 전용 프롬프트로 심화 작성
+- **에이전트 팀 구조 ✅ 구현 완료**
+  - 초안(단일 LLM)과 별도로 "풀버전" 생성 옵션 제공
+  - 4개 전문 에이전트를 **순차 실행** — 이전 에이전트 결과를 다음 에이전트 컨텍스트로 전달
 
   ```
-  Round 1 — 병렬 실행
-    Agent 1: 시장/트렌드  →  섹션 2, 8  (TAM/SAM/SOM, 성장률)
-    Agent 2: 경쟁 분석    →  섹션 5, 6  (경쟁사 비교표, 차별화)
+  Agent 1: 시장·문제 에이전트
+    → 섹션 2(트렌드), 3(문제정의), 8(시장규모·TAM)
+    → 입력: idea + searchResults
 
-  Round 2 — 병렬 실행 (Round 1 결과를 컨텍스트로 수신)
-    Agent 3: 재무 모델    →  섹션 11, 12  (수익 모델, 사업 전망)
-    Agent 4: 서비스 기획  →  섹션 3, 4, 7, 9  (문제 정의, 솔루션, 로드맵)
+  Agent 2: 경쟁·차별화 에이전트 (Agent 1 결과 포함)
+    → 섹션 5(경쟁분석), 6(차별화), 7(플랫폼전략)
+    → 입력: idea + marketContent + searchResults
 
-  Round 3
-    Agent 5: 리스크       →  섹션 13  (규제·법률·진입 장벽)
+  Agent 3: 전략·솔루션 에이전트 (Agent 1,2 결과 포함)
+    → 섹션 1(핵심요약), 4(솔루션), 9(로드맵), 10(상세계획)
+    → 입력: idea + marketContent + competitionContent + searchResults
 
-  최종
-    Combiner              →  섹션 1(핵심 요약) + 참고문헌 통합
+  Agent 4: 재무·리스크 에이전트 (Agent 1,2,3 결과 포함)
+    → 섹션 11(사업모델), 12(사업전망), 13(리스크), 참고문헌
+    → 입력: idea + marketContent + competitionContent + strategyContent + searchResults
+
+  클라이언트 조합: 1→2→3→4→5→6→7→8→9→10→11→12→13→참고문헌 순서로 재조합
   ```
 
-  - 에이전트별 Claude Haiku 사용 → 비용 절감, 최종 통합만 Sonnet
-  - 예상 소요: 병렬화로 현재 ~75초 유지 또는 단축, 품질 대폭 향상
-  - 구현 시 진입점: `app/src/app/api/generate/route.ts`의 `business-plan` 분기
+  - API 타입: `full-plan-market` / `full-plan-competition` / `full-plan-strategy` / `full-plan-finance`
+  - maxTokens: 16,000 (각 에이전트)
+  - OpenAI: 429 rate limit 시 최대 4회 자동 재시도 (retry-after 파싱)
+  - 구현 진입점: `app/src/app/api/generate/route.ts`의 `full-plan-*` 분기
 
 - **결과 저장 (Google Docs)**
   - 아이템 별로 각각의 Google Docs 파일을 생성한다.

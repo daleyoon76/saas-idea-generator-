@@ -13,7 +13,15 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
 ## 전체 흐름
 
 ```
-키워드 입력 → [검색] → 아이디어 생성(LLM) → 아이디어 선택 → [검색] → 사업기획서 생성(LLM) → 결과 출력
+키워드 입력
+  → [검색: Tavily + Reddit + Google Trends + Product Hunt 4-way 병렬]
+  → 아이디어 생성(LLM)
+  → 아이디어 선택
+  → [검색: Tavily 5개 쿼리]
+  → 사업기획서 초안 생성(LLM, 단일 호출)
+  → (선택) 풀버전 사업기획서 생성(에이전트 팀, 4개 LLM 순차 호출)
+  → (선택) PRD 생성(LLM, 단일 호출)
+  → 결과 출력 (.md / .docx 저장)
 ```
 
 ### 핵심 설계 원칙: 단일 소스 아키텍처
@@ -24,19 +32,27 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
 | 마크다운 파일 | 역할 | 수정 시 영향 |
 |---|---|---|
 | `app/src/assets/criteria.md` | 아이디어 발굴 기준 (R10) | 아이디어 생성 프롬프트에 자동 반영 |
-| `docs/bizplan-template.md` | 사업기획서 섹션 구조 | 사업기획서 생성 프롬프트에 자동 반영 |
+| `docs/bizplan-template.md` | 사업기획서 섹션 구조 | 초안 사업기획서 생성 프롬프트에 자동 반영 |
 
 ---
 
 ## `/api/generate` 요청 타입
 
-`/api/generate`는 `type` 필드에 따라 세 가지 방식으로 동작한다.
+`/api/generate`는 `type` 필드에 따라 동작한다.
 
 | `type` | 서버 동작 | 클라이언트 전송 필드 |
 |--------|-----------|-------------------|
-| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults` |
+| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults`, `trendsResults`, `productHuntResults` |
 | `business-plan` | `bizplan-template.md` 읽기 → `createBusinessPlanPrompt()` 호출 | `idea`, `searchResults` |
+| `generate-prd` | `prd-template.md` 읽기 → `createPRDPrompt()` 호출 | `idea`, `businessPlanContent` |
+| `full-plan-market` | `createFullPlanMarketPrompt()` 직접 호출 | `idea`, `searchResults` |
+| `full-plan-competition` | `createFullPlanCompetitionPrompt()` 직접 호출 | `idea`, `marketContent`, `searchResults` |
+| `full-plan-strategy` | `createFullPlanStrategyPrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `searchResults` |
+| `full-plan-finance` | `createFullPlanFinancePrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `strategyContent`, `searchResults` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
+
+- `business-plan`, `generate-prd`, `full-plan-*` → `maxTokens: 16000`
+- 나머지 → `maxTokens: 8192`
 
 ---
 
@@ -74,7 +90,7 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 **플랜 및 주요 기능** (공식 가격 페이지 기준):
 
 | 플랜 | 가격 | 트렌드 추적 | 주요 기능 |
-|------|------|------------|---------|
+|------|------|--------------|---------|
 | Entrepreneur | $39/월 | 100개 | 트렌드 DB, 트렌딩 상품, 메타 트렌드, 채널별 분석 |
 | Investor | $99/월 | 500개 | + 신흥 스타트업 추적, Future Forecast, CSV 내보내기 |
 | Business | $249/월 | 2,000개 | + 트렌드 리포트, API 접근 (엔드포인트 비공개) |
@@ -117,9 +133,9 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 
 ---
 
-### 1-1. 검색 (Tavily + Reddit + Google Trends 병렬)
+### 1-1. 검색 (Tavily + Reddit + Google Trends + Product Hunt 4-way 병렬)
 
-세 가지 소스를 **동시에** 실행한다.
+네 가지 소스를 **동시에** 실행한다.
 
 #### 1-1-A. Tavily 시장 조사 (`/api/search`)
 
@@ -165,6 +181,7 @@ SearchResult[] 매핑:
 URL 중복 제거 → 최대 12개 결과 반환
 ```
 
+- 한국어 키워드는 MyMemory API로 자동 영어 번역 후 검색
 - 실패 시 `{ results: [] }` 반환 — 기존 흐름 유지
 - 타임아웃: 8초 (`AbortSignal.timeout(8000)`)
 
@@ -222,11 +239,13 @@ SearchResult[] 변환:
 **데이터 흐름:**
 
 ```
-클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, trendsResults, productHuntResults, provider, model }
+클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults,
+              trendsResults, productHuntResults, provider, model }
     ↓
 서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
     ↓
-createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults)
+createIdeaGenerationPrompt(keyword, searchResults, criteria,
+                           redditResults, trendsResults, productHuntResults)
     ↓
 LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ```
@@ -245,30 +264,14 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ## Reddit 커뮤니티 페인포인트
 [Reddit 검색 결과 - 제목/URL/본문 발췌 (200자)]
 
+## 급등 트렌드 신호 (Google Trends)
+[Google Trends 급등 키워드 - 제목/성장률]
+
+## Product Hunt 트렌딩 제품 (최근 30일)
+[Product Hunt 트렌딩 제품 - 제목/URL/설명]
+
 위 발굴 기준과 시장 환경을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를
 아래 JSON 형식으로 출력하세요.
-각 아이디어는 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화,
-바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
-
-```json
-{
-  "ideas": [
-    {
-      "id": 1,
-      "name": "서비스 이름",
-      "category": "B2C 또는 B2B",
-      "oneLiner": "서비스 한 줄 설명",
-      "target": "대상 고객",
-      "problem": "해결하려는 문제",
-      "features": ["핵심 기능1", "핵심 기능2", "핵심 기능3"],
-      "differentiation": "차별화 포인트",
-      "revenueModel": "수익 모델",
-      "mvpDifficulty": "상/중/하 중 하나",
-      "rationale": "이 아이디어를 선정한 이유"
-    }
-  ]
-}
-```
 ~~~~
 
 **아이디어 발굴 기준 요약** (출처: `app/src/assets/criteria.md`, R10):
@@ -295,7 +298,7 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 
 ---
 
-## 단계 2: 사업기획서 생성
+## 단계 2: 사업기획서 초안 생성
 
 ### 2-1. 인터넷 검색 (`/api/search`)
 
@@ -324,29 +327,7 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
     ↓
 createBusinessPlanPrompt(idea, searchResults, template)
     ↓
-LLM 호출
-```
-
-**프롬프트 구조** (`lib/prompts.ts` > `createBusinessPlanPrompt`):
-
-```
-한국어로만 답변하세요.
-
-## 시장 조사 및 참고 자료
-[검색 결과 컨텍스트 - 제목/URL/내용 최대 5개]
-
-다음 서비스에 대한 상세 사업기획서를 작성해주세요.
-
-**서비스 정보:**
-- 서비스명 / 설명 / 대상 고객 / 해결하려는 문제 / 핵심 기능 / 차별화 포인트 / 수익 모델
-
-**작성 규칙:**
-- Bullet point 활용, 항목별 명사형 마무리
-- 통계·수치에 [1], [2] 형태 각주 표기
-- 마크다운 표 형식으로 비교표·도표 활용
-
-**아래 템플릿 형식에 맞춰 작성하세요:**
-[docs/bizplan-template.md 전체 내용]
+LLM 호출 (maxTokens: 16000)
 ```
 
 **출력 섹션** (`docs/bizplan-template.md` 기준):
@@ -370,18 +351,116 @@ LLM 호출
 
 ---
 
+## 단계 3: 풀버전 사업기획서 생성 (에이전트 팀)
+
+초안과 독립적으로 실행되는 별도 생성 단계. 4개 에이전트가 순차적으로 담당 섹션을 작성하며, 각 에이전트는 이전 에이전트의 출력을 컨텍스트로 받는다.
+
+### 3-1. 검색 (초안과 동일한 5개 쿼리)
+
+초안 생성(2-1)과 동일한 5개 쿼리를 재수집한다. (검색 결과를 상태로 저장하지 않아 재수집)
+
+### 3-2. 에이전트 팀 순차 호출
+
+```
+[검색 5개 쿼리]
+    ↓
+Agent 1 (full-plan-market)
+  입력: idea + searchResults
+  출력: 섹션 2(트렌드), 3(문제정의), 8(TAM/SAM/SOM)
+  → marketContent
+    ↓
+Agent 2 (full-plan-competition)
+  입력: idea + marketContent + searchResults
+  출력: 섹션 5(경쟁분석), 6(차별화), 7(플랫폼전략)
+  → competitionContent
+    ↓
+Agent 3 (full-plan-strategy)
+  입력: idea + marketContent + competitionContent + searchResults
+  출력: 섹션 1(핵심요약), 4(솔루션), 9(로드맵), 10(상세계획)
+  → strategyContent
+    ↓
+Agent 4 (full-plan-finance)
+  입력: idea + marketContent + competitionContent + strategyContent + searchResults
+  출력: 섹션 11(사업모델), 12(사업전망), 13(리스크), 참고문헌
+  → financeContent
+    ↓
+combineFullPlanSections()
+  섹션 순서: 1→2→3→4→5→6→7→8→9→10→11→12→13→참고문헌
+  → 최종 문서
+```
+
+### 3-3. 섹션 조합 (`combineFullPlanSections`)
+
+각 에이전트 출력에서 정규식으로 섹션을 추출해 올바른 순서로 재조립한다.
+
+```typescript
+// 섹션 마커 탐색: "\n## N." (볼드·변형 헤딩 대응)
+const pattern = new RegExp(`\n##\s+\**${sectionNum}[.．](?![0-9])`)
+```
+
+- 7개 미만 섹션 추출 시 raw 조합 fallback (strategyContent → marketContent → competitionContent → financeContent 순서로 단순 연결)
+
+### 3-4. UX 플로우
+
+- `view-plan`에서 "풀버전 사업기획서 생성하기 (에이전트 팀)" 버튼 클릭
+- `generating-full-plan` 화면: 4단계 진행률 + 에이전트별 완료 체크
+- `view-full-plan` 화면:
+  - "Full Version" 뱃지
+  - 탭: 생성된 풀버전 + 미생성 초안(점선 탭, 클릭 시 해당 초안 풀버전 생성)
+  - "초안 보기" 버튼으로 `view-plan` 복귀
+  - 마크다운/워드 저장, PRD 생성
+
+---
+
+## 단계 4: PRD 생성
+
+### 4-1. LLM 호출 (`/api/generate`, `type: 'generate-prd'`)
+
+```
+클라이언트: { type: 'generate-prd', idea, businessPlanContent, provider, model }
+  (businessPlanContent = 초안 또는 풀버전 — 호출 화면에 따라 결정)
+    ↓
+서버(api/generate): fs.readFileSync('docs/prd-template.md')
+    ↓
+createPRDPrompt(idea, businessPlanContent, template)
+    ↓
+LLM 호출 (maxTokens: 16000)
+```
+
+- `view-plan`에서 호출 → 초안 기반 PRD
+- `view-full-plan`에서 호출 → 풀버전 기반 PRD
+
+---
+
 ## AI 공급자
 
 | Provider | 기본 모델 | 설정 |
 |----------|-----------|------|
 | Ollama | gemma2:9b | `ollama serve` 실행 필요 |
 | Claude | claude-sonnet-4-6 | `ANTHROPIC_API_KEY` |
-| Gemini | gemini-2.0-flash | `GEMINI_API_KEY` |
+| Gemini | gemini-2.5-flash | `GEMINI_API_KEY` |
 | OpenAI | gpt-4o | `OPENAI_API_KEY` |
 
 - 모든 LLM 호출은 `/api/generate`로 단일화
 - provider 가용 여부는 페이지 마운트 시 `/api/providers`로 확인
 - Ollama만 `jsonMode`(`format: 'json'`) 지원 — 아이디어 생성 시 활성화
+- OpenAI: rate limit(429) 시 자동 대기 후 재시도 (최대 4회, retry-after 헤더 파싱)
+
+---
+
+## 저장 기능
+
+| 포맷 | 파일명 규칙 |
+|------|-----------|
+| 초안 `.md` | `사업기획서_{키워드}_{아이디어명}.md` |
+| 초안 `.docx` | `사업기획서_{키워드}_{아이디어명}.docx` |
+| 풀버전 `.md` | `사업기획서_Full_{키워드}_{아이디어명}.md` |
+| 풀버전 `.docx` | `사업기획서_Full_{키워드}_{아이디어명}.docx` |
+| PRD `.md` | `PRD_{키워드}_{아이디어명}.md` |
+| PRD `.docx` | `PRD_{키워드}_{아이디어명}.docx` |
+
+- `keyword` 없으면 생략
+- File System Access API (`showDirectoryPicker`) 지원 시 폴더 선택 저장, 미지원 시 브라우저 다운로드
 
 ---
 
@@ -396,7 +475,7 @@ LLM 호출
 | `app/src/app/api/trends/route.ts` | Google Trends 급등 신호 수집 (google-trends-api) |
 | `app/src/app/api/producthunt/route.ts` | Product Hunt 트렌딩 제품 수집 (GraphQL API v2) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
-| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
+| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (아이디어·초안·PRD·풀버전 에이전트 4종) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |
 | `app/src/assets/criteria.md` | 아이디어 발굴 기준 — **단일 소스** (R10, 수정 시 자동 반영) |
 | `docs/bizplan-template.md` | 사업기획서 섹션 구조 — **단일 소스** (수정 시 자동 반영) |

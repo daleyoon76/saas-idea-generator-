@@ -6,9 +6,6 @@
   - 메인 페이지 UI와 디자인을 참고할 수 있는 10개의 웹페이지를 찾아서 검토
   - 선정 페이지의 global CSS 추출해서 이 서비스 페이지 디자인에 반영
 
-- [ ] **OpenAI API 연결**
-  - OPENAI_API_KEY 설정 필요
-
 - [ ] **Phase 3: Google API 연동**
   - Google OAuth 2.0 인증, Sheets/Docs 저장
 
@@ -51,7 +48,7 @@
 - [x] Ollama (gemma2:9b) — 로컬
 - [x] Claude (claude-sonnet-4-6) — Anthropic
 - [x] Gemini (gemini-2.5-flash) — Google
-- [x] OpenAI (gpt-4o) — UI 연동 완료, API 키 미설정
+- [x] OpenAI (gpt-4o) — 연동 완료 (API 키 설정, 429 rate limit 자동 재시도 최대 4회)
 - [x] 모델 선택 UI (provider별 모델 드롭다운)
 - [x] provider 사용 가능 여부 실시간 표시
 
@@ -79,5 +76,6 @@
 
 ### Phase 5: 품질 개선
 
-- [ ] **에러 핸들링 강화** — API 실패 시 재시도 로직
+- [x] **에러 핸들링 강화** — OpenAI rate limit 429 자동 재시도 (최대 4회, retry-after 헤더 파싱)
 - [ ] **풀버전 에이전트 팀 개선** — 초안을 Agent 1 컨텍스트로 제공 여부 검토
+- [ ] **풀버전 멀티탭 UX 개선** — 다른 아이디어 탭에서 직접 풀버전 생성 가능하도록
