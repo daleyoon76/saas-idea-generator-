@@ -176,28 +176,47 @@ async function generateWithGemini(model: string, prompt: string, maxTokens: numb
   return data.candidates[0].content.parts[0].text;
 }
 
-async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
+async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: maxTokens,
-    }),
-  });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`OpenAI API 오류: ${err.error?.message || response.statusText}`);
+    // Rate limit → 대기 후 재시도
+    if (response.status === 429 && attempt < retries) {
+      const retryAfterHeader = response.headers.get('retry-after');
+      const errBody = await response.json().catch(() => ({}));
+      // 에러 메시지에서 "try again in Xs" 파싱
+      const msgMatch = (errBody?.error?.message as string || '').match(/try again in (\d+(?:\.\d+)?)s/);
+      const waitSec = retryAfterHeader
+        ? parseInt(retryAfterHeader, 10)
+        : msgMatch ? Math.ceil(parseFloat(msgMatch[1])) : 15;
+      const waitMs = (waitSec + 3) * 1000; // 3초 버퍼
+      console.log(`[OpenAI] Rate limit — ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`OpenAI API 오류: ${err.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   }
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+  throw new Error('OpenAI API: Rate limit 재시도 한도 초과. 잠시 후 다시 시도해주세요.');
 }

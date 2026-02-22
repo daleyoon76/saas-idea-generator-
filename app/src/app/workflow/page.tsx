@@ -745,109 +745,102 @@ export default function WorkflowPage() {
     }
   }
 
-  async function generateFullPlan() {
-    if (selectedIdeas.length === 0) return;
+  async function generateFullPlan(sourcePlan?: BusinessPlan) {
+    // sourcePlan이 주어지면 그것을 사용, 없으면 현재 탭 기획서 사용
+    const currentPlan = sourcePlan ?? businessPlans[currentPlanIndex];
+    if (!currentPlan) return;
+    const idea = ideas.find((i) => i.id === currentPlan.ideaId);
+    if (!idea) return;
 
     setIsLoading(true);
     setError(null);
     setStep('generating-full-plan');
-    setFullBusinessPlans([]);
     setProgressCurrent(0);
-    setProgressTotal(selectedIdeas.length * 4);
+    setProgressTotal(4);
     setCompletedSteps([]);
 
-    const agentEtaMs = 90000; // 에이전트 1개당 예상 90초
-    startTimer(selectedIdeas.length * 4 * agentEtaMs);
+    const agentEtaMs = 90000;
+    startTimer(4 * agentEtaMs);
 
     try {
-      const plans: BusinessPlan[] = [];
-      let completedAgents = 0;
+      // 시장 조사 (진행 표시 없이 조용히 수집)
+      let planSearchResults: SearchResult[] = [];
+      try {
+        planSearchResults = await searchMultiple([
+          `${idea.name} 경쟁사 대안 솔루션 비교`,
+          `${idea.target} 고객 페인포인트 문제점 수요`,
+          `${idea.category || 'SaaS'} 시장 규모 TAM SAM SOM 투자 트렌드 2025`,
+          `${idea.name} SaaS 가격 책정 수익 모델 사례`,
+          `${idea.name} 규제 법률 리스크 진입 장벽`,
+        ], 3, 'advanced');
+      } catch { /* 검색 실패 시 빈 배열로 계속 진행 */ }
 
-      for (const ideaId of selectedIdeas) {
-        const idea = ideas.find((i) => i.id === ideaId);
-        if (!idea) continue;
+      // ── Agent 1: 시장·문제 ────────────────────────────────────────────
+      setLoadingMessage(`[에이전트 1/4] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
+      const r1 = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults }),
+      });
+      if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
+      const marketContent = (await r1.json()).response as string;
+      setProgressCurrent(1);
+      setCompletedSteps(prev => [...prev, `[1/4] "${idea.name}" 시장·트렌드·TAM 분석 완료`]);
+      updateEta(3 * agentEtaMs);
 
-        // 시장 조사 (진행 표시 없이 조용히 수집)
-        let planSearchResults: SearchResult[] = [];
-        try {
-          planSearchResults = await searchMultiple([
-            `${idea.name} 경쟁사 대안 솔루션 비교`,
-            `${idea.target} 고객 페인포인트 문제점 수요`,
-            `${idea.category || 'SaaS'} 시장 규모 TAM SAM SOM 투자 트렌드 2025`,
-            `${idea.name} SaaS 가격 책정 수익 모델 사례`,
-            `${idea.name} 규제 법률 리스크 진입 장벽`,
-          ], 3, 'advanced');
-        } catch { /* 검색 실패 시 빈 배열로 계속 진행 */ }
+      // ── Agent 2: 경쟁·차별화 ─────────────────────────────────────────
+      setLoadingMessage(`[에이전트 2/4] "${idea.name}" 경쟁·차별화 분석 중...`);
+      const r2 = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults }),
+      });
+      if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
+      const competitionContent = (await r2.json()).response as string;
+      setProgressCurrent(2);
+      setCompletedSteps(prev => [...prev, `[2/4] "${idea.name}" 경쟁·차별화 분석 완료`]);
+      updateEta(2 * agentEtaMs);
 
-        // ── Agent 1: 시장·문제 ────────────────────────────────────────────
-        setLoadingMessage(`[에이전트 1/4] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
-        const r1 = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults }),
-        });
-        if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
-        const marketContent = (await r1.json()).response as string;
-        completedAgents += 1;
-        setProgressCurrent(completedAgents);
-        setCompletedSteps(prev => [...prev, `[1/4] "${idea.name}" 시장·트렌드·TAM 분석 완료`]);
-        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+      // ── Agent 3: 전략·솔루션 ─────────────────────────────────────────
+      setLoadingMessage(`[에이전트 3/4] "${idea.name}" 전략·로드맵 수립 중...`);
+      const r3 = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults }),
+      });
+      if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
+      const strategyContent = (await r3.json()).response as string;
+      setProgressCurrent(3);
+      setCompletedSteps(prev => [...prev, `[3/4] "${idea.name}" 전략·로드맵 수립 완료`]);
+      updateEta(1 * agentEtaMs);
 
-        // ── Agent 2: 경쟁·차별화 ─────────────────────────────────────────
-        setLoadingMessage(`[에이전트 2/4] "${idea.name}" 경쟁·차별화 분석 중...`);
-        const r2 = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults }),
-        });
-        if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
-        const competitionContent = (await r2.json()).response as string;
-        completedAgents += 1;
-        setProgressCurrent(completedAgents);
-        setCompletedSteps(prev => [...prev, `[2/4] "${idea.name}" 경쟁·차별화 분석 완료`]);
-        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+      // ── Agent 4: 재무·리스크 ─────────────────────────────────────────
+      setLoadingMessage(`[에이전트 4/4] "${idea.name}" 재무·리스크 분석 중...`);
+      const r4 = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults }),
+      });
+      if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
+      const financeContent = (await r4.json()).response as string;
+      setProgressCurrent(4);
+      setCompletedSteps(prev => [...prev, `[4/4] "${idea.name}" 재무·리스크 분석 완료`]);
 
-        // ── Agent 3: 전략·솔루션 ─────────────────────────────────────────
-        setLoadingMessage(`[에이전트 3/4] "${idea.name}" 전략·로드맵 수립 중...`);
-        const r3 = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults }),
-        });
-        if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
-        const strategyContent = (await r3.json()).response as string;
-        completedAgents += 1;
-        setProgressCurrent(completedAgents);
-        setCompletedSteps(prev => [...prev, `[3/4] "${idea.name}" 전략·로드맵 수립 완료`]);
-        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+      // ── 섹션 순서대로 조합 (1→2→3→...→참고문헌) ─────────────────────
+      const combined = combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
+      const newFullPlan: BusinessPlan = {
+        ideaId: idea.id,
+        ideaName: idea.name,
+        content: combined,
+        createdAt: new Date().toISOString(),
+        version: 'full',
+      };
 
-        // ── Agent 4: 재무·리스크 ─────────────────────────────────────────
-        setLoadingMessage(`[에이전트 4/4] "${idea.name}" 재무·리스크 분석 중...`);
-        const r4 = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults }),
-        });
-        if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
-        const financeContent = (await r4.json()).response as string;
-        completedAgents += 1;
-        setProgressCurrent(completedAgents);
-        setCompletedSteps(prev => [...prev, `[4/4] "${idea.name}" 재무·리스크 분석 완료`]);
-        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
-
-        // ── 섹션 순서대로 조합 (1→2→3→...→참고문헌) ─────────────────────
-        const combined = combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
-        plans.push({
-          ideaId: idea.id,
-          ideaName: idea.name,
-          content: combined,
-          createdAt: new Date().toISOString(),
-          version: 'full',
-        });
-      }
-
-      setFullBusinessPlans(plans);
-      setCurrentFullPlanIndex(0);
+      // 기존 풀버전 중 같은 ideaId가 있으면 교체, 없으면 추가 + 방금 만든 플랜으로 탭 이동
+      const prevFiltered = fullBusinessPlans.filter(p => p.ideaId !== idea.id);
+      const newPlans = [...prevFiltered, newFullPlan];
+      setFullBusinessPlans(newPlans);
+      setCurrentFullPlanIndex(newPlans.length - 1); // 방금 만든 플랜이 항상 마지막
       setStep('view-full-plan');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -867,29 +860,61 @@ export default function WorkflowPage() {
     strategyContent: string,    // 섹션 1, 4, 9, 10
     financeContent: string      // 섹션 11, 12, 13, 참고문헌
   ): string {
-    function getSection(content: string, marker: string): string {
-      const idx = content.indexOf(marker);
-      if (idx === -1) return '';
-      const nextIdx = content.indexOf('\n## ', idx + marker.length);
-      return content.slice(idx, nextIdx === -1 ? content.length : nextIdx).trim();
+    /**
+     * content 내에서 sectionNum 번호의 섹션을 추출한다.
+     * "## 2." / "## **2.**" / "## 2. 제목" 등 다양한 형태를 처리.
+     */
+    function getSection(content: string, sectionNum: number | '참고문헌'): string {
+      const normalized = '\n' + content; // 첫 섹션도 \n## 로 찾을 수 있게
+
+      let startIdx: number;
+      if (sectionNum === '참고문헌') {
+        const m = normalized.match(/\n##\s+\**참고문헌/);
+        if (!m || m.index === undefined) return '';
+        startIdx = m.index + 1;
+      } else {
+        // "## 숫자." — 앞뒤에 다른 숫자가 없는 경우만 매칭 (예: 1은 10,11... 과 구분)
+        const pattern = new RegExp(`\n##\\s+\\**${sectionNum}[.．](?![0-9])`);
+        const m = normalized.match(pattern);
+        if (!m || m.index === undefined) return '';
+        startIdx = m.index + 1;
+      }
+
+      // 다음 ## 섹션이 시작되는 위치 찾기
+      const rest = normalized.slice(startIdx + 1);
+      const nextMatch = rest.match(/\n##\s/);
+      const endIdx = nextMatch?.index !== undefined
+        ? startIdx + 1 + nextMatch.index
+        : normalized.length;
+
+      return normalized.slice(startIdx, endIdx).trim();
     }
 
     const ordered = [
-      getSection(strategyContent, '## 1.'),
-      getSection(marketContent, '## 2.'),
-      getSection(marketContent, '## 3.'),
-      getSection(strategyContent, '## 4.'),
-      getSection(competitionContent, '## 5.'),
-      getSection(competitionContent, '## 6.'),
-      getSection(competitionContent, '## 7.'),
-      getSection(marketContent, '## 8.'),
-      getSection(strategyContent, '## 9.'),
-      getSection(strategyContent, '## 10.'),
-      getSection(financeContent, '## 11.'),
-      getSection(financeContent, '## 12.'),
-      getSection(financeContent, '## 13.'),
-      getSection(financeContent, '## 참고문헌'),
+      getSection(strategyContent, 1),
+      getSection(marketContent, 2),
+      getSection(marketContent, 3),
+      getSection(strategyContent, 4),
+      getSection(competitionContent, 5),
+      getSection(competitionContent, 6),
+      getSection(competitionContent, 7),
+      getSection(marketContent, 8),
+      getSection(strategyContent, 9),
+      getSection(strategyContent, 10),
+      getSection(financeContent, 11),
+      getSection(financeContent, 12),
+      getSection(financeContent, 13),
+      getSection(financeContent, '참고문헌'),
     ].filter(Boolean);
+
+    // 섹션 추출이 절반 이하로 실패하면 raw 조합으로 fallback
+    if (ordered.length < 7) {
+      console.warn(`[combineFullPlanSections] 섹션 ${ordered.length}개만 추출됨 → raw 조합으로 대체`);
+      const raw = [strategyContent, marketContent, competitionContent, financeContent]
+        .filter(Boolean)
+        .join('\n\n---\n\n');
+      return `# ${ideaName} 사업기획서 (풀버전)\n\n${raw}`;
+    }
 
     return `# ${ideaName} 사업기획서 (풀버전)\n\n${ordered.join('\n\n---\n\n')}`;
   }
@@ -1469,7 +1494,7 @@ export default function WorkflowPage() {
                   개발문서(PRD) 생성하기
                 </button>
                 <button
-                  onClick={generateFullPlan}
+                  onClick={() => generateFullPlan()}
                   className="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
                 >
                   풀버전 사업기획서 생성하기 (에이전트 팀)
@@ -1600,24 +1625,39 @@ export default function WorkflowPage() {
         {/* Step: View Full Plan */}
         {step === 'view-full-plan' && fullBusinessPlans.length > 0 && (
           <div className="bg-white rounded-lg shadow p-8">
-            {/* Tabs */}
-            {fullBusinessPlans.length > 1 && (
-              <div className="flex space-x-2 mb-6 overflow-x-auto">
-                {fullBusinessPlans.map((plan, idx) => (
-                  <button
-                    key={plan.ideaId}
-                    onClick={() => setCurrentFullPlanIndex(idx)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                      currentFullPlanIndex === idx
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {plan.ideaName}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Tabs: 생성된 풀버전 + 미생성 초안 */}
+            {(() => {
+              const draftsWithoutFull = businessPlans.filter(
+                draft => !fullBusinessPlans.some(fp => fp.ideaId === draft.ideaId)
+              );
+              const showTabs = fullBusinessPlans.length > 1 || draftsWithoutFull.length > 0;
+              return showTabs ? (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {fullBusinessPlans.map((plan, idx) => (
+                    <button
+                      key={plan.ideaId}
+                      onClick={() => setCurrentFullPlanIndex(idx)}
+                      className={`px-4 py-2 rounded-lg whitespace-nowrap text-sm ${
+                        currentFullPlanIndex === idx
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {plan.ideaName}
+                    </button>
+                  ))}
+                  {draftsWithoutFull.map(draft => (
+                    <button
+                      key={draft.ideaId}
+                      onClick={() => generateFullPlan(draft)}
+                      className="px-4 py-2 rounded-lg whitespace-nowrap text-sm border-2 border-dashed border-purple-300 text-purple-500 hover:bg-purple-50 transition"
+                    >
+                      {draft.ideaName} — 풀버전 생성
+                    </button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
 
             {/* Current Full Plan */}
             <div>
