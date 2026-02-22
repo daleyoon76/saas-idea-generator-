@@ -26,6 +26,9 @@ export default function WorkflowPage() {
   const [rawResponse, setRawResponse] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(2);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [dirName, setDirName] = useState('다운로드');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -84,6 +87,9 @@ export default function WorkflowPage() {
     setError(null);
     setStep('generating-ideas');
     setSearchResults([]);
+    setProgressCurrent(0);
+    setProgressTotal(2);
+    setCompletedSteps([]);
 
     try {
       // Step 1: Search for market trends (parallel multi-query)
@@ -99,10 +105,12 @@ export default function WorkflowPage() {
       } catch (searchErr) {
         console.log('Search failed, continuing without search results:', searchErr);
       }
+      setProgressCurrent(1);
+      setCompletedSteps([`시장 자료 ${searchData.length}건 수집 완료`]);
 
       // Step 2: Generate ideas with search context
       // 프롬프트 구성은 서버(api/generate)에서 app/src/assets/criteria.md를 읽어 처리
-      setLoadingMessage('AI가 아이디어를 분석하고 있습니다...');
+      setLoadingMessage('AI가 아이디어 3개를 생성하는 중...');
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -242,6 +250,9 @@ export default function WorkflowPage() {
     setError(null);
     setStep('generating-plan');
     setBusinessPlans([]);
+    setProgressCurrent(0);
+    setProgressTotal(selectedIdeas.length * 2);
+    setCompletedSteps([]);
 
     try {
       const plans: BusinessPlan[] = [];
@@ -262,6 +273,8 @@ export default function WorkflowPage() {
         } catch (searchErr) {
           console.log('Search failed for business plan:', searchErr);
         }
+        setProgressCurrent(prev => prev + 1);
+        setCompletedSteps(prev => [...prev, `"${idea.name}" 시장 자료 ${planSearchResults.length}건 수집 완료`]);
 
         // Step 2: Generate business plan with search context
         // 프롬프트 구성은 서버(api/generate)에서 docs/bizplan-template.md를 읽어 처리
@@ -291,6 +304,8 @@ export default function WorkflowPage() {
           content: data.response,
           createdAt: new Date().toISOString(),
         });
+        setProgressCurrent(prev => prev + 1);
+        setCompletedSteps(prev => [...prev, `"${idea.name}" 사업기획서 작성 완료`]);
       }
 
       setBusinessPlans(plans);
@@ -381,7 +396,9 @@ export default function WorkflowPage() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
     const blob = await buildDocxBlob(pendingPlan);
-    const fileName = `사업기획안_${pendingPlan.ideaName}.docx`;
+    const fileName = keyword
+      ? `사업기획안_${keyword}_${pendingPlan.ideaName}.docx`
+      : `사업기획안_${pendingPlan.ideaName}.docx`;
     if (dirHandle) {
       try {
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
@@ -558,17 +575,40 @@ export default function WorkflowPage() {
 
         {/* Step: Generating Ideas */}
         {step === 'generating-ideas' && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2 text-gray-900">
-              아이디어 발굴 중...
-            </h2>
-            <p className="text-gray-700">
-              {loadingMessage || 'AI가 유망한 SaaS 아이디어를 분석하고 있습니다'}
-            </p>
-            {searchResults.length > 0 && (
-              <div className="mt-4 text-sm text-green-600">
-                ✓ {searchResults.length}개의 시장 조사 자료를 수집했습니다
+          <div className="bg-white rounded-lg shadow p-8">
+            <h2 className="text-xl font-semibold mb-6 text-gray-900">아이디어 발굴 중</h2>
+
+            {/* Progress bar */}
+            <div className="mb-1 flex justify-between items-center text-sm">
+              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-medium text-blue-600">
+                {Math.round((progressCurrent / progressTotal) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-700 ease-in-out"
+                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
+              />
+            </div>
+
+            {/* Completed steps */}
+            <div className="space-y-2 mb-4">
+              {completedSteps.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {msg}
+                </div>
+              ))}
+            </div>
+
+            {/* Current step */}
+            {progressCurrent < progressTotal && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full flex-shrink-0" />
+                {loadingMessage}
               </div>
             )}
           </div>
@@ -698,14 +738,42 @@ export default function WorkflowPage() {
 
         {/* Step: Generating Plan */}
         {step === 'generating-plan' && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2 text-gray-900">
-              사업기획서 작성 중...
-            </h2>
-            <p className="text-gray-700">
-              {loadingMessage || '선택하신 아이디어에 대한 상세 기획서를 작성하고 있습니다'}
-            </p>
+          <div className="bg-white rounded-lg shadow p-8">
+            <h2 className="text-xl font-semibold mb-6 text-gray-900">사업기획서 작성 중</h2>
+
+            {/* Progress bar */}
+            <div className="mb-1 flex justify-between items-center text-sm">
+              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-medium text-blue-600">
+                {Math.round((progressCurrent / progressTotal) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-700 ease-in-out"
+                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
+              />
+            </div>
+
+            {/* Completed steps */}
+            <div className="space-y-2 mb-4">
+              {completedSteps.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {msg}
+                </div>
+              ))}
+            </div>
+
+            {/* Current step */}
+            {progressCurrent < progressTotal && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full flex-shrink-0" />
+                {loadingMessage}
+              </div>
+            )}
           </div>
         )}
 
@@ -830,7 +898,7 @@ export default function WorkflowPage() {
             <div className="mb-4">
               <div className="text-xs text-gray-500 mb-1">파일명</div>
               <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-                사업기획안_{pendingPlan.ideaName}.docx
+                {keyword ? `사업기획안_${keyword}_${pendingPlan.ideaName}.docx` : `사업기획안_${pendingPlan.ideaName}.docx`}
               </div>
             </div>
 
