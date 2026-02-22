@@ -49,6 +49,8 @@ export default function WorkflowPage() {
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
   const [prds, setPRDs] = useState<PRD[]>([]);
   const [currentPRDIndex, setCurrentPRDIndex] = useState(0);
+  const [prdFormat, setPrdFormat] = useState<'markdown' | 'plain'>('markdown');
+  const [prdCopied, setPrdCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
@@ -80,6 +82,7 @@ export default function WorkflowPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
+  const [pendingFileFormat, setPendingFileFormat] = useState<'docx' | 'md'>('docx');
 
   useEffect(() => {
     checkProviders();
@@ -575,9 +578,10 @@ export default function WorkflowPage() {
     URL.revokeObjectURL(url);
   }
 
-  function openSaveDialog(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan') {
+  function openSaveDialog(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan', format: 'docx' | 'md' = 'docx') {
     setPendingPlan(plan);
     setPendingPlanType(type);
+    setPendingFileFormat(format);
     setShowSaveDialog(true);
   }
 
@@ -595,11 +599,21 @@ export default function WorkflowPage() {
   async function executeSave() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
-    const blob = await buildDocxBlob(pendingPlan);
     const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
-    const fileName = keyword
-      ? `${prefix}_${keyword}_${pendingPlan.ideaName}.docx`
-      : `${prefix}_${pendingPlan.ideaName}.docx`;
+    const baseName = keyword
+      ? `${prefix}_${keyword}_${pendingPlan.ideaName}`
+      : `${prefix}_${pendingPlan.ideaName}`;
+
+    let blob: Blob;
+    let fileName: string;
+    if (pendingFileFormat === 'md') {
+      blob = new Blob([pendingPlan.content], { type: 'text/markdown;charset=utf-8' });
+      fileName = `${baseName}.md`;
+    } else {
+      blob = await buildDocxBlob(pendingPlan);
+      fileName = `${baseName}.docx`;
+    }
+
     if (dirHandle) {
       try {
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
@@ -607,7 +621,6 @@ export default function WorkflowPage() {
         await writable.write(blob);
         await writable.close();
       } catch {
-        // 권한 오류 등 실패 시 브라우저 다운로드로 폴백
         triggerBrowserDownload(blob, fileName);
       }
     } else {
@@ -671,6 +684,26 @@ export default function WorkflowPage() {
       setLoadingMessage('');
       stopTimer();
     }
+  }
+
+  function stripMarkdownForAI(content: string): string {
+    return content
+      .replace(/^#{1,6}\s+/gm, '')               // 헤딩 기호 제거
+      .replace(/\*\*(.*?)\*\*/g, '$1')            // 볼드 제거
+      .replace(/\*(.*?)\*/g, '$1')               // 이탤릭 제거
+      .replace(/`([^`]+)`/g, '$1')               // 인라인 코드 제거
+      .replace(/^\s*[-]\s+/gm, '• ')             // 불릿 통일
+      .replace(/^(\s*)\|\s*[-:]+\s*\|.*/gm, '')  // 표 구분선 제거
+      .replace(/---+/gm, '')                     // 수평선 제거
+      .replace(/>\s?(.*)/gm, '$1')               // 인용 기호 제거
+      .replace(/\n{3,}/g, '\n\n')                // 연속 빈 줄 압축
+      .trim();
+  }
+
+  async function copyToClipboard(text: string) {
+    await navigator.clipboard.writeText(text);
+    setPrdCopied(true);
+    setTimeout(() => setPrdCopied(false), 2000);
   }
 
   function reset() {
@@ -1203,12 +1236,20 @@ export default function WorkflowPage() {
                   </svg>
                   제일 위로
                 </button>
-                <button
-                  onClick={() => openSaveDialog(businessPlans[currentPlanIndex])}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  워드 파일로 저장
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'md')}
+                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                  >
+                    마크다운으로 저장
+                  </button>
+                  <button
+                    onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')}
+                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    워드 파일로 저장
+                  </button>
+                </div>
               </div>
               <div className="mt-4 flex justify-center">
                 <button
@@ -1318,7 +1359,58 @@ export default function WorkflowPage() {
                 </button>
               </div>
 
+              {/* 포맷 선택 토글 */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setPrdFormat('markdown')}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
+                    prdFormat === 'markdown'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  마크다운 (개발자용)
+                </button>
+                <button
+                  onClick={() => setPrdFormat('plain')}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
+                    prdFormat === 'plain'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  AI용 서식
+                </button>
+                {prdFormat === 'plain' && (
+                  <button
+                    onClick={() => copyToClipboard(stripMarkdownForAI(prds[currentPRDIndex].content))}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 transition"
+                  >
+                    {prdCopied ? (
+                      <>
+                        <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        복사됨
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        클립보드 복사
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
               <div className="mb-6">
+                {prdFormat === 'plain' ? (
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-4 leading-6">
+                    {stripMarkdownForAI(prds[currentPRDIndex].content)}
+                  </pre>
+                ) : (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -1382,6 +1474,7 @@ export default function WorkflowPage() {
                 >
                   {prds[currentPRDIndex].content}
                 </ReactMarkdown>
+                )}
               </div>
 
               <div className="flex flex-wrap justify-between items-center gap-3">
@@ -1406,12 +1499,20 @@ export default function WorkflowPage() {
                 >
                   새로 시작
                 </button>
-                <button
-                  onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd')}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  워드 파일로 저장
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'md')}
+                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                  >
+                    마크다운으로 저장
+                  </button>
+                  <button
+                    onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')}
+                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    워드 파일로 저장
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1422,14 +1523,17 @@ export default function WorkflowPage() {
       {showSaveDialog && pendingPlan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-96">
-            <h3 className="text-lg font-semibold text-gray-900 mb-5">워드 파일로 저장</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-5">
+              {pendingFileFormat === 'md' ? '마크다운으로 저장' : '워드 파일로 저장'}
+            </h3>
 
             <div className="mb-4">
               <div className="text-xs text-gray-500 mb-1">파일명</div>
               <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
                 {(() => {
                   const prefix = pendingPlanType === 'prd' ? 'PRD' : '사업기획서';
-                  return keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}.docx` : `${prefix}_${pendingPlan.ideaName}.docx`;
+                  const base = keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}` : `${prefix}_${pendingPlan.ideaName}`;
+                  return `${base}.${pendingFileFormat}`;
                 })()}
               </div>
             </div>

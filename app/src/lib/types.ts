@@ -78,10 +78,10 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
   gemini: {
     label: 'Gemini',
     description: 'Google',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-2.5-flash',
     models: [
-      { id: 'gemini-2.0-flash-lite', label: 'Flash 2.0 Lite', description: '빠름·저렴' },
-      { id: 'gemini-2.0-flash', label: 'Flash 2.0', description: '균형 (추천)' },
+      { id: 'gemini-2.5-flash-lite', label: 'Flash 2.5 Lite', description: '빠름·저렴' },
+      { id: 'gemini-2.5-flash', label: 'Flash 2.5', description: '균형 (추천)' },
       { id: 'gemini-2.5-pro', label: 'Pro 2.5', description: '최고 성능' },
     ],
   },
