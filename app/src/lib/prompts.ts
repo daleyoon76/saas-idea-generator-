@@ -133,6 +133,254 @@ ${businessPlanContent}
 ${templateSection}`;
 }
 
+// ─── 풀버전 에이전트 팀 프롬프트 ───────────────────────────────────────────
+
+type FullPlanIdea = {
+  name: string;
+  oneLiner: string;
+  target: string;
+  features: string[];
+  differentiation: string;
+  revenueModel: string;
+  rationale: string;
+  category?: string;
+  problem?: string;
+};
+
+function buildSearchCtx(searchResults?: SearchResult[]): string {
+  if (!searchResults || searchResults.length === 0) return '';
+  return `\n## 시장 조사 자료\n다음은 인터넷 검색을 통해 수집한 최신 시장 정보입니다:\n\n${searchResults.map((r, i) => `${i + 1}. **${r.title}**\n   - URL: ${r.url}\n   - 내용: ${r.snippet}`).join('\n\n')}\n`;
+}
+
+function ideaBlock(idea: FullPlanIdea): string {
+  return `## 서비스 정보
+- 서비스명: ${idea.name}
+- 설명: ${idea.oneLiner}
+- 대상 고객: ${idea.target}
+- 해결하려는 문제: ${idea.problem || idea.rationale}
+- 핵심 기능: ${idea.features.join(', ')}
+- 차별화: ${idea.differentiation}
+- 수익 모델: ${idea.revenueModel}`;
+}
+
+/** Agent 1 — 시장·문제 에이전트: 섹션 2, 3, 8 */
+export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: SearchResult[]): string {
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+
+당신은 시장·트렌드 분석 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
+다른 섹션(1. 핵심요약, 4. 솔루션, 5. 경쟁분석 등)은 절대 포함하지 마세요.
+섹션 제목은 정확히 아래 형식을 유지하세요.
+
+## 2. 트렌드 (Trend)
+
+### 2.1 시장 트렌드 (Market Trend)
+
+- 이 서비스 관련 시장 규모·성장률·정책 변화 등 [번호]
+- 관련 수치는 Markdown 표로 시각화 (가능한 경우)
+
+### 2.2 기술 트렌드 (Tech Trend)
+
+- 이 서비스 관련 기술 성숙도·도입 사례·대안 기술 등 [번호]
+
+---
+
+## 3. 문제 정의 (Problems)
+
+- 기존에 어떤 문제가 있었는지 구체적으로
+- 이 서비스를 사용하면 기존 해결책보다 어떻게 더 효과적으로 해결되는지 명시
+
+---
+
+## 8. 시장 정의·규모 (Market Definition & TAM)
+
+- **시장 정의**: 타깃 세그먼트 정의
+- **TAM** (전체 시장): [번호]
+- **SAM** (획득 가능 시장): [번호]
+- **SOM** (현실적 점유 목표): [번호]
+- **성장 가능성**: 앞선 트렌드와 연결
+
+---
+
+작성 원칙:
+- Bullet point 중심, 항목별 명사형 마무리
+- 수치·통계에는 [1], [2] 형태 각주 필수
+- 검색 자료 없으면 "~로 추정" 또는 "업계 추정치"로 명시
+- 가상 기업명·수치 생성 금지`;
+}
+
+/** Agent 2 — 경쟁·차별화 에이전트: 섹션 5, 6, 7 */
+export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketContent: string, searchResults?: SearchResult[]): string {
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+
+## 이전 에이전트 분석 결과 (시장·문제·TAM)
+${marketContent}
+
+당신은 경쟁 분석·포지셔닝 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
+다른 섹션(1. 핵심요약, 2. 트렌드, 3. 문제정의 등)은 절대 포함하지 마세요.
+섹션 제목은 정확히 아래 형식을 유지하세요.
+
+## 5. 경쟁 분석 (Competitive Analysis)
+
+- 기존 방법 또는 직접 경쟁 제품 나열
+- 각 대안의 단점 분석 [번호]
+- **주요 경쟁 제품 비교표 (Markdown 표 형식, 최소 3개 경쟁사 필수)**
+- 직접 경쟁사 없으면 "직접 경쟁사 미확인"으로 표기
+
+---
+
+## 6. 차별화 (Differentiator)
+
+- 기존 솔루션들과의 차별성
+- 우리 서비스가 기존 대안들의 단점을 어떻게, 얼마나 극복하는지 구체적으로
+- **차별화 포인트 도표 (Markdown 표 필수)**
+
+---
+
+## 7. 플랫폼 전략 (Platform Strategy)
+
+- 솔루션이 성공해 사용자 규모가 커졌을 때 가능한 확장 전략
+- 부가 서비스, API·파트너십 등
+
+---
+
+작성 원칙:
+- Bullet point 중심, 항목별 명사형 마무리
+- 비교표, 차별화 도표 등 Markdown 표 형식 적극 활용
+- 가상 기업명 생성 금지`;
+}
+
+/** Agent 3 — 전략·솔루션 에이전트: 섹션 1, 4, 9, 10 */
+export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, searchResults?: SearchResult[]): string {
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+
+## 이전 에이전트 분석 결과 (시장·문제·경쟁·차별화)
+${marketContent}
+
+${competitionContent}
+
+당신은 제품 전략·개발 로드맵 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
+다른 섹션(2. 트렌드, 5. 경쟁분석 등)은 절대 포함하지 마세요.
+섹션 제목은 정확히 아래 형식을 유지하세요.
+
+## 1. 핵심 요약 (Executive Summary)
+
+- **서비스 한 줄 요약**
+- **핵심 가치** (어떤 문제를 어떻게 해결하는지)
+- **목표 시장·목표 사용자 수**
+
+---
+
+## 4. 솔루션 (Solution)
+
+- **만들려는 것** (서비스·제품 개요)
+- **핵심 기능 목록** (구체적으로)
+- **UI/UX·제공 형태 요약**
+
+---
+
+## 9. 로드맵 (Roadmap)
+
+- 향후 개발을 어떤 단계로 진행해 출시할지
+- Phase 1 / Phase 2 / Phase 3 구분, 마일스톤별 목표·산출물·대략적 시기
+
+---
+
+## 10. 상세 프로젝트 계획 (Detail Project Plan)
+
+- 단계별 태스크, 담당, 기간, 의존 관계
+- Markdown 표로 작성 (가능한 경우)
+
+---
+
+작성 원칙:
+- Bullet point 중심, 항목별 명사형 마무리
+- 로드맵은 단계별 구조로 명확하게
+- 구체적이고 실행 가능한 수준으로 작성`;
+}
+
+/** Agent 4 — 재무·리스크 에이전트: 섹션 11, 12, 13, 참고문헌 */
+export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, strategyContent: string, searchResults?: SearchResult[]): string {
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+
+## 이전 에이전트 분석 결과 (시장·경쟁·전략)
+${marketContent}
+
+${competitionContent}
+
+${strategyContent}
+
+당신은 재무 모델링·리스크 분석 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
+다른 섹션(1~10)은 절대 포함하지 마세요.
+섹션 제목은 정확히 아래 형식을 유지하세요.
+
+## 11. 사업 모델 (Business Model)
+
+### 11.1 판매 방식
+
+- **수익화 방식**: 구독 / 직접 판매 / 라이센싱 등
+- 채널·고객 유형 요약
+
+### 11.2 가격 (Pricing)
+
+- **가격 티어 예시** (Starter / Pro / Enterprise 등) [번호]
+- **경쟁 제품 대비 가격 비교** (Markdown 표)
+- **손익분기점 도달 조건** — 초기 개발비·운영비 대비 [번호]
+
+---
+
+## 12. 사업 전망 (Business Forecast)
+
+### 12.1 리소스 계획
+
+- **인력**: 역할·인원·투입 기간
+- **비용**: 직접비(인건비, 외주, 인프라), 간접비(관리, 마케팅)
+
+### 12.2 매출 전망 [번호]
+
+- 보수/기본/낙관 시나리오 구분
+
+### 12.3 손익분기 시점 (BEP)
+
+- 전제 조건(가격, 고객 수, 비용 가정)
+- 월/분기 기준
+
+---
+
+## 13. 리스크 분석 (Risk Analysis)
+
+- 기술·시장·인력·규제 리스크 분석
+- **규제·법률 리스크 최소 1개 필수**
+- 각 리스크별 대응 방안·완화 전략
+
+---
+
+## 참고문헌 (References)
+
+검색 자료 URL 전체를 아래 형식으로 나열:
+
+- [1] (내용 요약)
+  - 출처: (출처명)
+  - URL: (URL)
+
+---
+
+작성 원칙:
+- Bullet point 중심, 항목별 명사형 마무리
+- 수치·통계에는 [번호] 각주 필수
+- 출처 없는 수치는 "~로 추정" 또는 "업계 추정치"로 명시
+- 가상 기업명·수치 생성 금지`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function createBusinessPlanPrompt(idea: {
   name: string;
   oneLiner: string;

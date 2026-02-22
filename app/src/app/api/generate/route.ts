@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, SearchResult } from '@/lib/prompts';
+import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -59,11 +59,22 @@ export async function POST(request: NextRequest) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
     } else if (type === 'generate-prd' && idea) {
       prompt = buildPRDPrompt(idea as Idea, body.businessPlanContent as string || '');
+    } else if (type === 'full-plan-market' && idea) {
+      prompt = createFullPlanMarketPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
+    } else if (type === 'full-plan-competition' && idea) {
+      prompt = createFullPlanCompetitionPrompt(idea as Idea, body.marketContent as string || '', (searchResults as SearchResult[]) || []);
+    } else if (type === 'full-plan-strategy' && idea) {
+      prompt = createFullPlanStrategyPrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', (searchResults as SearchResult[]) || []);
+    } else if (type === 'full-plan-finance' && idea) {
+      prompt = createFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || []);
     } else {
       prompt = rawPrompt;
     }
 
-    const maxTokens = (type === 'business-plan' || type === 'generate-prd') ? 16000 : 8192;
+    const isLongDoc = type === 'business-plan' || type === 'generate-prd' ||
+      type === 'full-plan-market' || type === 'full-plan-competition' ||
+      type === 'full-plan-strategy' || type === 'full-plan-finance';
+    const maxTokens = isLongDoc ? 16000 : 8192;
     let response: string;
 
     switch (provider) {

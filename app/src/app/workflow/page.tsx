@@ -47,6 +47,8 @@ export default function WorkflowPage() {
   const [selectedIdeas, setSelectedIdeas] = useState<number[]>([]);
   const [businessPlans, setBusinessPlans] = useState<BusinessPlan[]>([]);
   const [currentPlanIndex, setCurrentPlanIndex] = useState(0);
+  const [fullBusinessPlans, setFullBusinessPlans] = useState<BusinessPlan[]>([]);
+  const [currentFullPlanIndex, setCurrentFullPlanIndex] = useState(0);
   const [prds, setPRDs] = useState<PRD[]>([]);
   const [currentPRDIndex, setCurrentPRDIndex] = useState(0);
   const [prdFormat, setPrdFormat] = useState<'markdown' | 'plain'>('markdown');
@@ -683,8 +685,8 @@ export default function WorkflowPage() {
     }
   }
 
-  async function generatePRD() {
-    const currentPlan = businessPlans[currentPlanIndex];
+  async function generatePRD(sourcePlan?: BusinessPlan, returnStep: WorkflowStep = 'view-plan') {
+    const currentPlan = sourcePlan ?? businessPlans[currentPlanIndex];
     if (!currentPlan) return;
     const idea = ideas.find((i) => i.id === currentPlan.ideaId);
     if (!idea) return;
@@ -733,12 +735,161 @@ export default function WorkflowPage() {
       setStep('view-prd');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      setStep(returnStep);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+      stopTimer();
+    }
+  }
+
+  async function generateFullPlan() {
+    if (selectedIdeas.length === 0) return;
+
+    setIsLoading(true);
+    setError(null);
+    setStep('generating-full-plan');
+    setFullBusinessPlans([]);
+    setProgressCurrent(0);
+    setProgressTotal(selectedIdeas.length * 4);
+    setCompletedSteps([]);
+
+    const agentEtaMs = 90000; // 에이전트 1개당 예상 90초
+    startTimer(selectedIdeas.length * 4 * agentEtaMs);
+
+    try {
+      const plans: BusinessPlan[] = [];
+      let completedAgents = 0;
+
+      for (const ideaId of selectedIdeas) {
+        const idea = ideas.find((i) => i.id === ideaId);
+        if (!idea) continue;
+
+        // 시장 조사 (진행 표시 없이 조용히 수집)
+        let planSearchResults: SearchResult[] = [];
+        try {
+          planSearchResults = await searchMultiple([
+            `${idea.name} 경쟁사 대안 솔루션 비교`,
+            `${idea.target} 고객 페인포인트 문제점 수요`,
+            `${idea.category || 'SaaS'} 시장 규모 TAM SAM SOM 투자 트렌드 2025`,
+            `${idea.name} SaaS 가격 책정 수익 모델 사례`,
+            `${idea.name} 규제 법률 리스크 진입 장벽`,
+          ], 3, 'advanced');
+        } catch { /* 검색 실패 시 빈 배열로 계속 진행 */ }
+
+        // ── Agent 1: 시장·문제 ────────────────────────────────────────────
+        setLoadingMessage(`[에이전트 1/4] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
+        const r1 = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults }),
+        });
+        if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
+        const marketContent = (await r1.json()).response as string;
+        completedAgents += 1;
+        setProgressCurrent(completedAgents);
+        setCompletedSteps(prev => [...prev, `[1/4] "${idea.name}" 시장·트렌드·TAM 분석 완료`]);
+        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+
+        // ── Agent 2: 경쟁·차별화 ─────────────────────────────────────────
+        setLoadingMessage(`[에이전트 2/4] "${idea.name}" 경쟁·차별화 분석 중...`);
+        const r2 = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults }),
+        });
+        if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
+        const competitionContent = (await r2.json()).response as string;
+        completedAgents += 1;
+        setProgressCurrent(completedAgents);
+        setCompletedSteps(prev => [...prev, `[2/4] "${idea.name}" 경쟁·차별화 분석 완료`]);
+        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+
+        // ── Agent 3: 전략·솔루션 ─────────────────────────────────────────
+        setLoadingMessage(`[에이전트 3/4] "${idea.name}" 전략·로드맵 수립 중...`);
+        const r3 = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults }),
+        });
+        if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
+        const strategyContent = (await r3.json()).response as string;
+        completedAgents += 1;
+        setProgressCurrent(completedAgents);
+        setCompletedSteps(prev => [...prev, `[3/4] "${idea.name}" 전략·로드맵 수립 완료`]);
+        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+
+        // ── Agent 4: 재무·리스크 ─────────────────────────────────────────
+        setLoadingMessage(`[에이전트 4/4] "${idea.name}" 재무·리스크 분석 중...`);
+        const r4 = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults }),
+        });
+        if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
+        const financeContent = (await r4.json()).response as string;
+        completedAgents += 1;
+        setProgressCurrent(completedAgents);
+        setCompletedSteps(prev => [...prev, `[4/4] "${idea.name}" 재무·리스크 분석 완료`]);
+        updateEta((selectedIdeas.length * 4 - completedAgents) * agentEtaMs);
+
+        // ── 섹션 순서대로 조합 (1→2→3→...→참고문헌) ─────────────────────
+        const combined = combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
+        plans.push({
+          ideaId: idea.id,
+          ideaName: idea.name,
+          content: combined,
+          createdAt: new Date().toISOString(),
+          version: 'full',
+        });
+      }
+
+      setFullBusinessPlans(plans);
+      setCurrentFullPlanIndex(0);
+      setStep('view-full-plan');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       setStep('view-plan');
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
       stopTimer();
     }
+  }
+
+  /** 4개 에이전트 출력물에서 섹션을 추출해 1→2→3→...→참고문헌 순서로 합친다 */
+  function combineFullPlanSections(
+    ideaName: string,
+    marketContent: string,      // 섹션 2, 3, 8
+    competitionContent: string, // 섹션 5, 6, 7
+    strategyContent: string,    // 섹션 1, 4, 9, 10
+    financeContent: string      // 섹션 11, 12, 13, 참고문헌
+  ): string {
+    function getSection(content: string, marker: string): string {
+      const idx = content.indexOf(marker);
+      if (idx === -1) return '';
+      const nextIdx = content.indexOf('\n## ', idx + marker.length);
+      return content.slice(idx, nextIdx === -1 ? content.length : nextIdx).trim();
+    }
+
+    const ordered = [
+      getSection(strategyContent, '## 1.'),
+      getSection(marketContent, '## 2.'),
+      getSection(marketContent, '## 3.'),
+      getSection(strategyContent, '## 4.'),
+      getSection(competitionContent, '## 5.'),
+      getSection(competitionContent, '## 6.'),
+      getSection(competitionContent, '## 7.'),
+      getSection(marketContent, '## 8.'),
+      getSection(strategyContent, '## 9.'),
+      getSection(strategyContent, '## 10.'),
+      getSection(financeContent, '## 11.'),
+      getSection(financeContent, '## 12.'),
+      getSection(financeContent, '## 13.'),
+      getSection(financeContent, '## 참고문헌'),
+    ].filter(Boolean);
+
+    return `# ${ideaName} 사업기획서 (풀버전)\n\n${ordered.join('\n\n---\n\n')}`;
   }
 
   function stripMarkdownForAI(content: string): string {
@@ -769,6 +920,8 @@ export default function WorkflowPage() {
     setSelectedIdeas([]);
     setBusinessPlans([]);
     setCurrentPlanIndex(0);
+    setFullBusinessPlans([]);
+    setCurrentFullPlanIndex(0);
     setPRDs([]);
     setCurrentPRDIndex(0);
     setError(null);
@@ -1306,12 +1459,18 @@ export default function WorkflowPage() {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 flex justify-center">
+              <div className="mt-4 flex flex-wrap justify-center gap-3">
                 <button
-                  onClick={generatePRD}
+                  onClick={() => generatePRD()}
                   className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
                 >
                   개발문서(PRD) 생성하기
+                </button>
+                <button
+                  onClick={generateFullPlan}
+                  className="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
+                >
+                  풀버전 사업기획서 생성하기 (에이전트 팀)
                 </button>
               </div>
             </div>
@@ -1372,6 +1531,222 @@ export default function WorkflowPage() {
                 {loadingMessage || 'PRD 초안을 작성하는 중입니다...'}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Step: Generating Full Plan */}
+        {step === 'generating-full-plan' && (
+          <div className="bg-white rounded-lg shadow p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">풀버전 사업기획서 작성 중</h2>
+              <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">에이전트 팀</span>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">4개 전문 에이전트가 순차적으로 각 섹션을 심층 분석합니다.</p>
+
+            {/* Time info */}
+            <div className="flex gap-8 mb-5">
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
+                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+              </div>
+              {etaSeconds !== null && (
+                <div>
+                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
+                  <div className="font-mono text-base font-semibold text-purple-600">
+                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-1 flex justify-between items-center text-sm">
+              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-medium text-purple-600">
+                {Math.round((progressCurrent / progressTotal) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
+              <div
+                className="bg-purple-600 h-2 rounded-full transition-all duration-700 ease-in-out"
+                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
+              />
+            </div>
+
+            {/* Completed steps */}
+            <div className="space-y-2 mb-4">
+              {completedSteps.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {msg}
+                </div>
+              ))}
+            </div>
+
+            {/* Current step */}
+            {progressCurrent < progressTotal && (
+              <div className="flex items-center gap-2 text-sm text-purple-600">
+                <div className="animate-spin w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full flex-shrink-0" />
+                {loadingMessage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step: View Full Plan */}
+        {step === 'view-full-plan' && fullBusinessPlans.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-8">
+            {/* Tabs */}
+            {fullBusinessPlans.length > 1 && (
+              <div className="flex space-x-2 mb-6 overflow-x-auto">
+                {fullBusinessPlans.map((plan, idx) => (
+                  <button
+                    key={plan.ideaId}
+                    onClick={() => setCurrentFullPlanIndex(idx)}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap ${
+                      currentFullPlanIndex === idx
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {plan.ideaName}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Current Full Plan */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{fullBusinessPlans[currentFullPlanIndex].ideaName}</h2>
+                  <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">Full Version</span>
+                </div>
+                <button
+                  onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  제일 아래로
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h2: ({ children }) => (
+                      <div className="bg-purple-800 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
+                        {children}
+                      </div>
+                    ),
+                    h3: ({ children }) => (
+                      <div className="bg-purple-50 text-purple-800 px-4 py-2 border-l-4 border-purple-500 font-semibold text-base mt-5 mb-2">
+                        {children}
+                      </div>
+                    ),
+                    h4: ({ children }) => (
+                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
+                        {children}
+                      </div>
+                    ),
+                    p: ({ children }) => (
+                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="text-sm text-gray-700 leading-7">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-bold text-gray-900">{children}</strong>
+                    ),
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="w-full border-collapse text-sm">{children}</table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-purple-50">{children}</thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody className="divide-y divide-gray-200">{children}</tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="hover:bg-gray-50">{children}</tr>
+                    ),
+                    th: ({ children }) => (
+                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
+                    ),
+                    a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-600 underline text-sm hover:text-purple-800">{children}</a>
+                    ),
+                    hr: () => (
+                      <hr className="border-gray-200 my-6" />
+                    ),
+                  }}
+                >
+                  {fullBusinessPlans[currentFullPlanIndex].content}
+                </ReactMarkdown>
+              </div>
+
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                <button
+                  onClick={() => setStep('view-plan')}
+                  className="px-6 py-3 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition"
+                >
+                  초안 보기
+                </button>
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  제일 위로
+                </button>
+                <button
+                  onClick={reset}
+                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  새로 시작
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')}
+                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                  >
+                    마크다운으로 저장
+                  </button>
+                  <button
+                    onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')}
+                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    워드 파일로 저장
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => generatePRD(fullBusinessPlans[currentFullPlanIndex], 'view-full-plan')}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                  개발문서(PRD) 생성하기
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

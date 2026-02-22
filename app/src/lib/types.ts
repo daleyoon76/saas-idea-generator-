@@ -17,6 +17,7 @@ export interface BusinessPlan {
   ideaName: string;
   content: string;
   createdAt: string;
+  version?: 'draft' | 'full';
 }
 
 export interface PRD {
@@ -34,6 +35,8 @@ export type WorkflowStep =
   | 'view-plan'
   | 'generating-prd'
   | 'view-prd'
+  | 'generating-full-plan'
+  | 'view-full-plan'
   | 'complete';
 
 export type IdeaCategory =
