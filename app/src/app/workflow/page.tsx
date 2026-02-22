@@ -511,6 +511,26 @@ export default function WorkflowPage() {
     const lines = plan.content.split('\n');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const children: any[] = [];
+
+    // 문서 메타 정보 (생성 모델 + 일시)
+    const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(
+      m => m.id === selectedModels[selectedProvider]
+    )?.label ?? selectedModels[selectedProvider];
+    const providerLabel = PROVIDER_CONFIGS[selectedProvider].label;
+    const createdAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    children.push(new Paragraph({
+      children: [
+        new TextRun({ text: `생성 모델: ${providerLabel} ${modelLabel}`, size: 18, color: '6B7280' }),
+        new TextRun({ text: `    |    생성 일시: ${createdAt}`, size: 18, color: '6B7280' }),
+      ],
+      spacing: { after: 40 },
+    }));
+    children.push(new Paragraph({
+      children: [new TextRun({ text: '', size: 4 })],
+      border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' } },
+      spacing: { after: 200 },
+    }));
+
     let i = 0;
 
     while (i < lines.length) {
