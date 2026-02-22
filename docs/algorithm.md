@@ -117,9 +117,9 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 
 ---
 
-### 1-1. 검색 (Tavily + Reddit 병렬)
+### 1-1. 검색 (Tavily + Reddit + Google Trends 병렬)
 
-Tavily 시장 조사와 Reddit 페인포인트 수집을 **동시에** 실행한다.
+세 가지 소스를 **동시에** 실행한다.
 
 #### 1-1-A. Tavily 시장 조사 (`/api/search`)
 
@@ -168,16 +168,41 @@ URL 중복 제거 → 최대 12개 결과 반환
 - 실패 시 `{ results: [] }` 반환 — 기존 흐름 유지
 - 타임아웃: 8초 (`AbortSignal.timeout(8000)`)
 
+#### 1-1-C. Google Trends 급등 신호 (`/api/trends`)
+
+`google-trends-api` npm 패키지(비공식)로 최근 90일 급등 쿼리 수집:
+
+**데이터 흐름**:
+
+```
+googleTrends.relatedQueries({ keyword, startTime: -90일, geo: '' })
+    ↓
+rankedList[1].rankedKeyword (risingQueries — 성장률 기준)
+    ↓
+노이즈 필터:
+  - 비영어·비한글 문자 포함 쿼리 제거 (중국어·러시아어 등)
+  - "what is X" 등 기초 정의 쿼리 제거
+    ↓
+최대 8개 → SearchResult[] 변환:
+  title   → "급등 트렌드: {query}"
+  url     → Google Trends 탐색 링크
+  snippet → "Breakout — 5000%↑ 급등 중" 또는 "+{value}% (최근 90일)"
+```
+
+- `Breakout` = Google Trends 성장률 5000% 초과 (아직 주류 아님)
+- 실패해도 빈 배열 반환 — 기존 흐름 유지 (비공식 패키지라 차단 가능성 있음)
+- 패키지: `google-trends-api@4.9.2`
+
 ### 1-2. LLM 호출 (`/api/generate`, `type: 'generate-ideas'`)
 
 **데이터 흐름:**
 
 ```
-클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, provider, model }
+클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults, trendsResults, provider, model }
     ↓
 서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
     ↓
-createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults)
+createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults)
     ↓
 LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ```
@@ -344,6 +369,7 @@ LLM 호출
 | `app/src/app/api/generate/route.ts` | LLM 라우팅 + 프롬프트 조립 (서버) |
 | `app/src/app/api/search/route.ts` | Tavily 검색 |
 | `app/src/app/api/reddit/route.ts` | Reddit 페인포인트 검색 (PullPush.io) |
+| `app/src/app/api/trends/route.ts` | Google Trends 급등 신호 수집 (google-trends-api) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (`createIdeaGenerationPrompt`, `createBusinessPlanPrompt`) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |

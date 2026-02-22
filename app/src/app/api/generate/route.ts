@@ -31,7 +31,7 @@ function buildPRDPrompt(idea: Idea, businessPlanContent: string): string {
 }
 
 // app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
-function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: SearchResult[], redditResults: SearchResult[] = []): string {
+function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: SearchResult[], redditResults: SearchResult[] = [], trendsResults: SearchResult[] = []): string {
   let criteria: string | undefined;
   try {
     const criteriaPath = path.join(process.cwd(), 'src', 'assets', 'criteria.md');
@@ -39,7 +39,7 @@ function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: S
   } catch {
     console.warn('criteria.md 읽기 실패, 기본 기준으로 폴백');
   }
-  return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults);
+  return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults);
 }
 
 export async function POST(request: NextRequest) {
@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
     // PRD 요청: 서버에서 prd-template.md 읽어 프롬프트 생성
     let prompt: string;
     if (type === 'generate-ideas') {
-      const { keyword, searchResults: sr, redditResults: rr } = body;
-      prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || [], (rr as SearchResult[]) || []);
+      const { keyword, searchResults: sr, redditResults: rr, trendsResults: tr } = body;
+      prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || [], (rr as SearchResult[]) || [], (tr as SearchResult[]) || []);
     } else if (type === 'business-plan' && idea) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
     } else if (type === 'generate-prd' && idea) {

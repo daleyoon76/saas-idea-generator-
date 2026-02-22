@@ -8,7 +8,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[]): string {
+export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[]): string {
   const keywordPart = keyword ? `"${keyword}" 관련` : '';
 
   let searchContext = '';
@@ -39,6 +39,18 @@ ${redditResults.map((r, i) => `${i + 1}. **${r.title}** (출처: ${r.url})
 `;
   }
 
+  let trendsContext = '';
+  if (trendsResults && trendsResults.length > 0) {
+    trendsContext = `
+## 급등 트렌드 신호 (Google Trends)
+다음은 현재 급격히 성장하고 있지만 아직 주류가 되지 않은 키워드들입니다.
+이 트렌드를 아이디어의 방향성과 타이밍 판단에 적극 활용하세요:
+
+${trendsResults.map((r, i) => `${i + 1}. **${r.title.replace('급등 트렌드: ', '')}** — ${r.snippet}`).join('\n')}
+
+`;
+  }
+
   const criteriaSection = criteria
     ? `## 아이디어 발굴 기준\n${criteria}`
     : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
@@ -52,7 +64,7 @@ ${redditResults.map((r, i) => `${i + 1}. **${r.title}** (출처: ${r.url})
 - rationale 필드는 검색 자료 [번호]를 인용하여 근거를 제시하세요.
 
 ${criteriaSection}
-${searchContext}${redditContext}
+${searchContext}${redditContext}${trendsContext}
 위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} SaaS/Agent 아이디어 3개를 아래 JSON 형식으로 출력하세요.
 각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
 

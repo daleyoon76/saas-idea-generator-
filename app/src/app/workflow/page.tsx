@@ -171,6 +171,20 @@ export default function WorkflowPage() {
     }
   }
 
+  async function searchTrends(kw: string): Promise<SearchResult[]> {
+    try {
+      const res = await fetch('/api/trends', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: kw || 'SaaS' }),
+      });
+      if (!res.ok) return [];
+      return ((await res.json()).results || []) as SearchResult[];
+    } catch {
+      return [];
+    }
+  }
+
   async function generateIdeas() {
     setIsLoading(true);
     setError(null);
@@ -184,20 +198,22 @@ export default function WorkflowPage() {
     startTimer(timings.ideaSearch + timings.ideaLLM);
 
     try {
-      // Step 1: Search for market trends (Tavily) + Reddit pain points in parallel
+      // Step 1: 시장 조사(Tavily) + Reddit 페인포인트 + Google Trends 급등 신호 병렬 수집
       let searchData: SearchResult[] = [];
       let redditData: SearchResult[] = [];
-      setLoadingMessage('시장 조사 + Reddit 페인포인트 수집 중...');
+      let trendsData: SearchResult[] = [];
+      setLoadingMessage('시장 조사 + Reddit + Google Trends 급등 신호 수집 중...');
       const searchStart = Date.now();
       try {
         const base = keyword || 'SaaS AI 에이전트';
-        [searchData, redditData] = await Promise.all([
+        [searchData, redditData, trendsData] = await Promise.all([
           searchMultiple([
             `${base} SaaS 시장 규모 성장률 트렌드 2025`,
             `${base} B2B B2C 솔루션 스타트업 투자 기회`,
             `${base} AI 자동화 에이전트 적용 사례 2025`,
           ]),
           searchReddit(keyword || 'SaaS startup'),
+          searchTrends(keyword || 'SaaS'),
         ]);
         setSearchResults(searchData);
       } catch (searchErr) {
@@ -205,7 +221,9 @@ export default function WorkflowPage() {
       }
       updateStoredTiming('ideaSearch', Date.now() - searchStart);
       setProgressCurrent(1);
-      setCompletedSteps([`시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 수집 완료`]);
+      setCompletedSteps([
+        `시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 + 급등 트렌드 ${trendsData.length}건 수집 완료`,
+      ]);
       updateEta(timings.ideaLLM);
 
       // Step 2: Generate ideas with search context
@@ -223,6 +241,7 @@ export default function WorkflowPage() {
           keyword: keyword || undefined,
           searchResults: searchData,
           redditResults: redditData,
+          trendsResults: trendsData,
         }),
       });
 
