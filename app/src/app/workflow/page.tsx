@@ -26,6 +26,10 @@ export default function WorkflowPage() {
   const [rawResponse, setRawResponse] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [dirName, setDirName] = useState('다운로드');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
 
   useEffect(() => {
     checkProviders();
@@ -50,6 +54,31 @@ export default function WorkflowPage() {
     return availableProviders[selectedProvider] === true;
   }
 
+  async function searchMultiple(queries: string[], countEach: number = 4): Promise<SearchResult[]> {
+    const allResults = await Promise.all(
+      queries.map(async (q) => {
+        try {
+          const res = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q, count: countEach }),
+          });
+          if (!res.ok) return [];
+          const data = await res.json();
+          return (data.results || []) as SearchResult[];
+        } catch {
+          return [];
+        }
+      })
+    );
+    const seen = new Set<string>();
+    return allResults.flat().filter((r) => {
+      if (seen.has(r.url)) return false;
+      seen.add(r.url);
+      return true;
+    });
+  }
+
   async function generateIdeas() {
     setIsLoading(true);
     setError(null);
@@ -57,24 +86,18 @@ export default function WorkflowPage() {
     setSearchResults([]);
 
     try {
-      // Step 1: Search for market trends
+      // Step 1: Search for market trends (parallel multi-query)
       let searchData: SearchResult[] = [];
-      if (keyword) {
-        setLoadingMessage('시장 트렌드 검색 중...');
-        try {
-          const searchRes = await fetch('/api/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: `최신 ${keyword} SaaS 트렌드`, count: 5 }),
-          });
-          if (searchRes.ok) {
-            const data = await searchRes.json();
-            searchData = data.results || [];
-            setSearchResults(searchData);
-          }
-        } catch (searchErr) {
-          console.log('Search failed, continuing without search results:', searchErr);
-        }
+      setLoadingMessage('시장 규모·트렌드 조사 중...');
+      try {
+        const base = keyword || 'SaaS AI 에이전트';
+        searchData = await searchMultiple([
+          `${base} SaaS 시장 규모 성장률 트렌드 2025`,
+          `${base} B2B B2C 솔루션 스타트업 투자 기회`,
+        ]);
+        setSearchResults(searchData);
+      } catch (searchErr) {
+        console.log('Search failed, continuing without search results:', searchErr);
       }
 
       // Step 2: Generate ideas with search context
@@ -227,22 +250,15 @@ export default function WorkflowPage() {
         const idea = ideas.find((i) => i.id === ideaId);
         if (!idea) continue;
 
-        // Step 1: Search for relevant market data and competitors
+        // Step 1: Search for relevant market data (parallel multi-query)
         setLoadingMessage(`"${idea.name}" 관련 시장 조사 중...`);
         let planSearchResults: SearchResult[] = [];
         try {
-          const searchRes = await fetch('/api/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `${idea.name} ${idea.target} 시장 경쟁사 트렌드`,
-              count: 5,
-            }),
-          });
-          if (searchRes.ok) {
-            const data = await searchRes.json();
-            planSearchResults = data.results || [];
-          }
+          planSearchResults = await searchMultiple([
+            `${idea.name} 경쟁사 대안 솔루션 비교`,
+            `${idea.target} 고객 페인포인트 문제점 수요`,
+            `${idea.category || 'SaaS'} 시장 규모 TAM 투자 트렌드 2025`,
+          ], 3);
         } catch (searchErr) {
           console.log('Search failed for business plan:', searchErr);
         }
@@ -304,7 +320,7 @@ export default function WorkflowPage() {
     });
   }
 
-  async function downloadPlan(plan: BusinessPlan) {
+  async function buildDocxBlob(plan: BusinessPlan): Promise<Blob> {
     const lines = plan.content.split('\n');
     const children: Paragraph[] = [];
 
@@ -333,13 +349,52 @@ export default function WorkflowPage() {
       sections: [{ children }],
     });
 
-    const blob = await Packer.toBlob(doc);
+    return await Packer.toBlob(doc);
+  }
+
+  function triggerBrowserDownload(blob: Blob, fileName: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `사업기획안_${plan.ideaName}.docx`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function openSaveDialog(plan: BusinessPlan) {
+    setPendingPlan(plan);
+    setShowSaveDialog(true);
+  }
+
+  async function handlePickFolder() {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handle: FileSystemDirectoryHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+      setDirHandle(handle);
+      setDirName(handle.name);
+    } catch {
+      // 사용자가 취소한 경우 무시
+    }
+  }
+
+  async function executeSave() {
+    if (!pendingPlan) return;
+    setShowSaveDialog(false);
+    const blob = await buildDocxBlob(pendingPlan);
+    const fileName = `사업기획안_${pendingPlan.ideaName}.docx`;
+    if (dirHandle) {
+      try {
+        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } catch {
+        // 권한 오류 등 실패 시 브라우저 다운로드로 폴백
+        triggerBrowserDownload(blob, fileName);
+      }
+    } else {
+      triggerBrowserDownload(blob, fileName);
+    }
   }
 
   function reset() {
@@ -755,7 +810,7 @@ export default function WorkflowPage() {
                   새로 시작
                 </button>
                 <button
-                  onClick={() => downloadPlan(businessPlans[currentPlanIndex])}
+                  onClick={() => openSaveDialog(businessPlans[currentPlanIndex])}
                   className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                 >
                   워드 파일로 저장
@@ -765,6 +820,54 @@ export default function WorkflowPage() {
           </div>
         )}
       </div>
+
+      {/* Save Dialog Modal */}
+      {showSaveDialog && pendingPlan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-96">
+            <h3 className="text-lg font-semibold text-gray-900 mb-5">워드 파일로 저장</h3>
+
+            <div className="mb-4">
+              <div className="text-xs text-gray-500 mb-1">파일명</div>
+              <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                사업기획안_{pendingPlan.ideaName}.docx
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <div className="text-xs text-gray-500 mb-1">저장 위치</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200 truncate">
+                  {dirName}
+                </div>
+                {'showDirectoryPicker' in window && (
+                  <button
+                    onClick={handlePickFolder}
+                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    변경
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowSaveDialog(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={executeSave}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

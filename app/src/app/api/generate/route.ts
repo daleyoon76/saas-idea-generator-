@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       prompt = rawPrompt;
     }
 
+    const maxTokens = type === 'business-plan' ? 16000 : 8192;
     let response: string;
 
     switch (provider) {
@@ -55,13 +56,13 @@ export async function POST(request: NextRequest) {
         response = await generateWithOllama(model || 'gemma2:9b', prompt, jsonMode);
         break;
       case 'claude':
-        response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt);
+        response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
         break;
       case 'gemini':
-        response = await generateWithGemini(model || 'gemini-2.0-flash', prompt);
+        response = await generateWithGemini(model || 'gemini-2.0-flash', prompt, maxTokens);
         break;
       case 'openai':
-        response = await generateWithOpenAI(model || 'gpt-4o', prompt);
+        response = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
         break;
       default:
         return NextResponse.json({ error: '지원하지 않는 AI 공급자입니다.' }, { status: 400 });
@@ -97,7 +98,7 @@ async function generateWithOllama(model: string, prompt: string, jsonMode: boole
   return data.response;
 }
 
-async function generateWithClaude(model: string, prompt: string): Promise<string> {
+async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -110,7 +111,7 @@ async function generateWithClaude(model: string, prompt: string): Promise<string
     },
     body: JSON.stringify({
       model,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -124,7 +125,7 @@ async function generateWithClaude(model: string, prompt: string): Promise<string
   return data.content[0].text;
 }
 
-async function generateWithGemini(model: string, prompt: string): Promise<string> {
+async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -135,7 +136,7 @@ async function generateWithGemini(model: string, prompt: string): Promise<string
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 8192 },
+        generationConfig: { maxOutputTokens: maxTokens },
       }),
     }
   );
@@ -149,7 +150,7 @@ async function generateWithGemini(model: string, prompt: string): Promise<string
   return data.candidates[0].content.parts[0].text;
 }
 
-async function generateWithOpenAI(model: string, prompt: string): Promise<string> {
+async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -162,7 +163,7 @@ async function generateWithOpenAI(model: string, prompt: string): Promise<string
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 8192,
+      max_tokens: maxTokens,
     }),
   });
 
