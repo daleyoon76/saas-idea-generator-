@@ -15,7 +15,12 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* 영문 → Outfit, 한국어 → Noto Sans KR (브라우저 자동 fallback) */
+  font-family: var(--font-outfit), var(--font-noto-sans-kr), "Noto Sans KR", sans-serif;
+}
+
+code, pre, kbd {
+  font-family: var(--font-mono), "Geist Mono", "Fira Code", monospace;
 }
 
 /* Hero blob glow animation */
