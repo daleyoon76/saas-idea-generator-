@@ -34,6 +34,7 @@ function formatTime(seconds: number): string {
   const s = seconds % 60;
   return m > 0 ? `${m}분 ${s.toString().padStart(2, '0')}초` : `${s}초`;
 }
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
@@ -955,90 +956,120 @@ export default function WorkflowPage() {
     setRawResponse('');
   }
 
+  // ── 캐니언 컬러 팔레트 ──────────────────────────────────────
+  const C = {
+    bg:        '#FDF5EE',
+    cardBg:    '#FFFAF5',
+    border:    '#F0D5C0',
+    textDark:  '#3D1008',
+    textMid:   '#8B5A40',
+    textLight: '#B08060',
+    accent:    '#C24B25',
+    amber:     '#F5901E',
+    amberLight:'#FFB347',
+    cream:     '#FDE8D0',
+    selectedBg:'#FEF3EB',
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto py-12 px-4">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            SaaS 사업기획안 도출
-          </h1>
-          <p className="text-gray-700">
-            AI가 유망한 SaaS 아이디어를 발굴하고 사업기획서를 작성합니다
-          </p>
+    <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
+
+      {/* ── 상단 네비게이션 ────────────────────────────────────── */}
+      <nav
+        className="sticky top-0 z-20"
+        style={{ backgroundColor: C.cardBg, borderBottom: `1px solid ${C.border}` }}
+      >
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-sm transition hover:opacity-70"
+            style={{ color: C.textMid }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            홈으로
+          </Link>
+          <div className="flex items-center gap-2">
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${C.amber}, ${C.amberLight})` }}
+            >
+              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <span className="font-semibold text-sm" style={{ color: C.textDark }}>SaaS Idea Generator</span>
+          </div>
+          {/* Provider 상태 */}
+          <div className="text-xs">
+            {availableProviders[selectedProvider] === null ? (
+              <span style={{ color: C.textLight }}>확인 중...</span>
+            ) : availableProviders[selectedProvider] ? (
+              <span className="flex items-center gap-1" style={{ color: '#6B7B3A' }}>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                {PROVIDER_CONFIGS[selectedProvider].label}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-red-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                {PROVIDER_CONFIGS[selectedProvider].label} 미설정
+              </span>
+            )}
+          </div>
         </div>
+      </nav>
 
-        {/* Provider Status */}
-        <div className="mb-8 text-center">
-          {availableProviders[selectedProvider] === null ? (
-            <span className="text-gray-500 text-sm">AI 모델 상태 확인 중...</span>
-          ) : availableProviders[selectedProvider] ? (
-            <span className="text-green-600 text-sm">
-              ● {PROVIDER_CONFIGS[selectedProvider].label} 사용 가능
-            </span>
-          ) : (
-            <span className="text-red-500 text-sm">
-              ● {PROVIDER_CONFIGS[selectedProvider].label} 사용 불가
-              {selectedProvider === 'ollama' && ' — ollama serve 실행 필요'}
-              {selectedProvider !== 'ollama' && ' — .env.local에 API 키 추가 필요'}
-            </span>
-          )}
-        </div>
+      <div className="max-w-4xl mx-auto py-10 px-4">
 
-        {/* Progress Steps */}
-        <div className="flex justify-center mb-12">
-          <div className="flex items-center space-x-4">
-            {['키워드 입력', '아이디어 선택', '기획서 작성', '완료'].map(
-              (label, idx) => {
-                const stepOrder = ['keyword', 'select-ideas', 'view-plan', 'complete'];
-                const currentIdx = stepOrder.indexOf(step);
-                const isActive = idx <= currentIdx || step === 'generating-ideas' || step === 'generating-plan';
-
-                return (
-                  <div key={label} className="flex items-center">
+        {/* ── 진행 단계 표시 ─────────────────────────────────────── */}
+        <div className="flex justify-center mb-10">
+          <div className="flex items-center gap-1">
+            {['키워드 입력', '아이디어 선택', '기획서 작성', '완료'].map((label, idx) => {
+              const stepOrder = ['keyword', 'select-ideas', 'view-plan', 'complete'];
+              const currentIdx = stepOrder.indexOf(step);
+              const isActive = idx <= currentIdx || step === 'generating-ideas' || step === 'generating-plan';
+              return (
+                <div key={label} className="flex items-center">
+                  <div className="flex flex-col items-center">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 text-gray-600'
-                      }`}
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all"
+                      style={isActive
+                        ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                        : { backgroundColor: '#F0D5C0', color: C.textLight }
+                      }
                     >
                       {idx + 1}
                     </div>
-                    <span
-                      className={`ml-2 text-sm ${
-                        isActive ? 'text-gray-900' : 'text-gray-600'
-                      }`}
-                    >
+                    <span className="mt-1 text-xs" style={{ color: isActive ? C.textDark : C.textLight }}>
                       {label}
                     </span>
-                    {idx < 3 && (
-                      <div
-                        className={`w-12 h-0.5 mx-4 ${
-                          idx < currentIdx ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
-                      />
-                    )}
                   </div>
-                );
-              }
-            )}
+                  {idx < 3 && (
+                    <div
+                      className="w-10 h-px mx-2 mb-4"
+                      style={{ backgroundColor: idx < currentIdx ? C.accent : '#F0D5C0' }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <div className="mb-8 p-4 rounded-xl text-sm" style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
             {error}
           </div>
         )}
 
         {/* Step: Keyword Input */}
         {step === 'keyword' && (
-          <div className="bg-white rounded-lg shadow p-8">
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {/* AI Model Selector */}
             <div className="mb-8">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.textLight }}>
                 사용할 AI 모델 선택
               </h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1050,19 +1081,19 @@ export default function WorkflowPage() {
                     <div
                       key={provider}
                       onClick={() => setSelectedProvider(provider)}
-                      className={`relative p-3 rounded-lg border-2 text-left transition cursor-pointer ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className="relative p-3 rounded-xl text-left transition cursor-pointer"
+                      style={isSelected
+                        ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg }
+                        : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
+                      }
                     >
-                      <div className="font-medium text-sm text-gray-900">{cfg.label}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{cfg.description}</div>
+                      <div className="font-semibold text-sm" style={{ color: C.textDark }}>{cfg.label}</div>
+                      <div className="text-xs mt-0.5" style={{ color: C.textMid }}>{cfg.description}</div>
                       <div className="mt-1.5">
                         {available === null ? (
-                          <span className="text-xs text-gray-400">확인 중...</span>
+                          <span className="text-xs" style={{ color: C.textLight }}>확인 중...</span>
                         ) : available ? (
-                          <span className="text-xs text-green-600">● 사용 가능</span>
+                          <span className="text-xs text-emerald-600">● 사용 가능</span>
                         ) : (
                           <span className="text-xs text-red-400">● 미설정</span>
                         )}
@@ -1072,7 +1103,8 @@ export default function WorkflowPage() {
                           value={selectedModels[provider]}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => setSelectedModels(prev => ({ ...prev, [provider]: e.target.value }))}
-                          className="mt-2 w-full text-xs border border-blue-300 rounded px-1.5 py-1 bg-white text-gray-700 cursor-pointer"
+                          className="mt-2 w-full text-xs rounded px-1.5 py-1 cursor-pointer"
+                          style={{ border: `1px solid ${C.accent}`, backgroundColor: '#fff', color: C.textDark }}
                         >
                           {cfg.models.map(m => (
                             <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
@@ -1085,31 +1117,39 @@ export default function WorkflowPage() {
               </div>
             </div>
 
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">
+            <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
               서비스 아이템을 브레인스토밍해보려고 합니다
             </h2>
-            <p className="text-gray-700 mb-6">
-              특별히 원하는 키워드가 있으면 넣어주세요. (옵션)
+            <p className="mb-6 text-sm" style={{ color: C.textMid }}>
+              특별히 원하는 키워드가 있으면 넣어주세요. (옵션 — 비워두면 AI가 자동 선정)
             </p>
             <input
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && isProviderReady()) {
-                  generateIdeas();
-                }
-              }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && isProviderReady()) generateIdeas(); }}
               placeholder="예: AI, 헬스케어, 교육, 생산성..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 placeholder:text-gray-400"
+              className="w-full px-4 py-3 rounded-xl outline-none transition"
+              style={{
+                border: `1.5px solid ${C.border}`,
+                backgroundColor: '#fff',
+                color: C.textDark,
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
             />
             <div className="mt-6 flex justify-end">
               <button
                 onClick={generateIdeas}
                 disabled={!isProviderReady()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`,
+                  color: '#fff',
+                  boxShadow: `0 4px 16px rgba(194,75,37,0.3)`,
+                }}
               >
-                아이디어 발굴 시작
+                아이디어 발굴 시작 →
               </button>
             </div>
           </div>
@@ -1117,55 +1157,42 @@ export default function WorkflowPage() {
 
         {/* Step: Generating Ideas */}
         {step === 'generating-ideas' && (
-          <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">아이디어 발굴 중</h2>
-
-            {/* Time info */}
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h2 className="text-xl font-semibold mb-5" style={{ color: C.textDark }}>아이디어 발굴 중</h2>
             <div className="flex gap-8 mb-5">
               <div>
-                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
-                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
+                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
               </div>
               {etaSeconds !== null && (
                 <div>
-                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
-                  <div className="font-mono text-base font-semibold text-blue-600">
+                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
+                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
                     {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
-              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
-              <span className="font-medium text-blue-600">
-                {Math.round((progressCurrent / progressTotal) * 100)}%
-              </span>
+              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-700 ease-in-out"
-                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
-              />
+            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
+              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
             </div>
-
-            {/* Completed steps */}
             <div className="space-y-2 mb-4">
               {completedSteps.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   {msg}
                 </div>
               ))}
             </div>
-
-            {/* Current step */}
             {progressCurrent < progressTotal && (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full flex-shrink-0" />
+              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
+                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
                 {loadingMessage}
               </div>
             )}
@@ -1174,11 +1201,11 @@ export default function WorkflowPage() {
 
         {/* Step: Select Ideas */}
         {step === 'select-ideas' && (
-          <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
               진행할 아이디어를 선택해주세요
             </h2>
-            <p className="text-gray-700 mb-6">
+            <p className="text-sm mb-6" style={{ color: C.textMid }}>
               상세 사업기획서를 작성할 아이디어를 선택하세요. (복수 선택 가능)
             </p>
 
@@ -1187,68 +1214,58 @@ export default function WorkflowPage() {
                 <div
                   key={idea.id}
                   onClick={() => toggleIdeaSelection(idea.id)}
-                  className={`p-6 border-2 rounded-lg cursor-pointer transition ${
-                    selectedIdeas.includes(idea.id)
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  className="p-5 rounded-xl cursor-pointer transition-all"
+                  style={selectedIdeas.includes(idea.id)
+                    ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg }
+                    : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
+                  }
                 >
-                  <div className="flex items-start">
+                  <div className="flex items-start gap-3">
                     <div
-                      className={`w-6 h-6 rounded border-2 flex items-center justify-center mr-4 flex-shrink-0 ${
-                        selectedIdeas.includes(idea.id)
-                          ? 'border-blue-600 bg-blue-600'
-                          : 'border-gray-300'
-                      }`}
+                      className="w-5 h-5 rounded flex items-center justify-center mt-0.5 flex-shrink-0 transition-all"
+                      style={selectedIdeas.includes(idea.id)
+                        ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})` }
+                        : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
+                      }
                     >
                       {selectedIdeas.includes(idea.id) && (
-                        <svg
-                          className="w-4 h-4 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold text-lg text-gray-900">{idea.name}</h3>
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <h3 className="font-semibold text-base" style={{ color: C.textDark }}>{idea.name}</h3>
                         {idea.category && (
-                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                          <span className="px-2 py-0.5 text-xs rounded-full" style={{ backgroundColor: C.selectedBg, color: C.accent, border: `1px solid ${C.border}` }}>
                             {idea.category}
                           </span>
                         )}
                         {idea.mvpDifficulty && (
                           <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            idea.mvpDifficulty === '하' ? 'bg-green-100 text-green-700' :
-                            idea.mvpDifficulty === '중' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
+                            idea.mvpDifficulty === '하' ? 'bg-emerald-50 text-emerald-700' :
+                            idea.mvpDifficulty === '중' ? 'bg-yellow-50 text-yellow-700' :
+                            'bg-red-50 text-red-600'
                           }`}>
-                            난이도: {idea.mvpDifficulty}
+                            난이도 {idea.mvpDifficulty}
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-800 mb-2">{idea.oneLiner}</p>
+                      <p className="text-sm mb-2" style={{ color: C.textDark }}>{idea.oneLiner}</p>
                       {idea.problem && (
-                        <p className="text-sm text-gray-700 mb-2">
+                        <p className="text-xs mb-2" style={{ color: C.textMid }}>
                           <span className="font-medium">해결 문제:</span> {idea.problem}
                         </p>
                       )}
-                      <div className="text-sm text-gray-700 flex flex-wrap gap-x-4 gap-y-1">
+                      <div className="text-xs flex flex-wrap gap-x-4 gap-y-1 mb-2" style={{ color: C.textMid }}>
                         <span>타깃: {idea.target}</span>
                         <span>수익모델: {idea.revenueModel}</span>
                       </div>
                       {idea.features && idea.features.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {idea.features.map((feature, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">
+                            <span key={idx} className="px-2 py-0.5 text-xs rounded-md" style={{ backgroundColor: '#F0D5C0', color: C.textMid }}>
                               {feature}
                             </span>
                           ))}
@@ -1262,31 +1279,20 @@ export default function WorkflowPage() {
 
             {/* Raw Response Toggle */}
             <details className="mb-6">
-              <summary className="cursor-pointer text-sm text-gray-700 hover:text-gray-900">
-                AI 원본 응답 보기
-              </summary>
-              <pre className="mt-2 p-4 bg-gray-100 rounded text-xs overflow-auto max-h-96 whitespace-pre-wrap text-gray-800">
+              <summary className="cursor-pointer text-xs" style={{ color: C.textLight }}>AI 원본 응답 보기</summary>
+              <pre className="mt-2 p-4 rounded-xl text-xs overflow-auto max-h-64 whitespace-pre-wrap" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
                 {rawResponse}
               </pre>
             </details>
 
-            <div className="flex justify-between items-center">
-              <button
-                onClick={reset}
-                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              >
-                처음으로
-              </button>
-              <button
-                onClick={() => window.location.href = '/'}
-                className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-              >
-                모두 진행 중단
-              </button>
+            <div className="flex justify-between items-center gap-3 flex-wrap">
+              <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>처음으로</button>
+              <button onClick={() => window.location.href = '/'} className="px-5 py-2.5 rounded-xl text-sm text-red-600 transition" style={{ border: '1px solid #FECACA', backgroundColor: '#FEF2F2' }}>진행 중단</button>
               <button
                 onClick={generateBusinessPlan}
                 disabled={selectedIdeas.length === 0}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                className="px-6 py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff', boxShadow: `0 4px 12px rgba(194,75,37,0.25)` }}
               >
                 사업기획서 작성 ({selectedIdeas.length}개 선택)
               </button>
@@ -1296,55 +1302,42 @@ export default function WorkflowPage() {
 
         {/* Step: Generating Plan */}
         {step === 'generating-plan' && (
-          <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">사업기획서 작성 중</h2>
-
-            {/* Time info */}
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h2 className="text-xl font-semibold mb-5" style={{ color: C.textDark }}>사업기획서 작성 중</h2>
             <div className="flex gap-8 mb-5">
               <div>
-                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
-                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
+                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
               </div>
               {etaSeconds !== null && (
                 <div>
-                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
-                  <div className="font-mono text-base font-semibold text-blue-600">
+                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
+                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
                     {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
-              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
-              <span className="font-medium text-blue-600">
-                {Math.round((progressCurrent / progressTotal) * 100)}%
-              </span>
+              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-700 ease-in-out"
-                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
-              />
+            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
+              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
             </div>
-
-            {/* Completed steps */}
             <div className="space-y-2 mb-4">
               {completedSteps.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   {msg}
                 </div>
               ))}
             </div>
-
-            {/* Current step */}
             {progressCurrent < progressTotal && (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full flex-shrink-0" />
+              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
+                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
                 {loadingMessage}
               </div>
             )}
@@ -1353,19 +1346,19 @@ export default function WorkflowPage() {
 
         {/* Step: View Plan */}
         {step === 'view-plan' && businessPlans.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-8">
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {/* Plan Tabs */}
             {businessPlans.length > 1 && (
-              <div className="flex space-x-2 mb-6 overflow-x-auto">
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
                 {businessPlans.map((plan, idx) => (
                   <button
                     key={plan.ideaId}
                     onClick={() => setCurrentPlanIndex(idx)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                      currentPlanIndex === idx
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className="px-4 py-2 rounded-xl text-sm whitespace-nowrap font-medium transition"
+                    style={currentPlanIndex === idx
+                      ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                      : { backgroundColor: '#F0D5C0', color: C.textMid }
+                    }
                   >
                     {plan.ideaName}
                   </button>
@@ -1375,18 +1368,16 @@ export default function WorkflowPage() {
 
             {/* Current Plan */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-bold" style={{ color: C.textDark }}>
                   {businessPlans[currentPlanIndex].ideaName}
                 </h2>
                 <button
                   onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition"
+                  style={{ border: `1px solid ${C.border}`, color: C.textMid }}
                 >
-                  제일 아래로
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  아래로 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
               </div>
               <div className="mb-6">
@@ -1394,110 +1385,56 @@ export default function WorkflowPage() {
                   remarkPlugins={[remarkGfm]}
                   components={{
                     h2: ({ children }) => (
-                      <div className="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
+                      <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>
                         {children}
                       </div>
                     ),
                     h3: ({ children }) => (
-                      <div className="bg-blue-50 text-blue-800 px-4 py-2 border-l-4 border-blue-500 font-semibold text-base mt-5 mb-2">
+                      <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>
                         {children}
                       </div>
                     ),
                     h4: ({ children }) => (
-                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
+                      <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>
                         {children}
                       </div>
                     ),
-                    p: ({ children }) => (
-                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="text-sm text-gray-700 leading-7">{children}</li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-bold text-gray-900">{children}</strong>
-                    ),
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="w-full border-collapse text-sm">{children}</table>
-                      </div>
-                    ),
-                    thead: ({ children }) => (
-                      <thead className="bg-slate-100">{children}</thead>
-                    ),
-                    tbody: ({ children }) => (
-                      <tbody className="divide-y divide-gray-200">{children}</tbody>
-                    ),
-                    tr: ({ children }) => (
-                      <tr className="hover:bg-gray-50">{children}</tr>
-                    ),
-                    th: ({ children }) => (
-                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
-                    ),
-                    a: ({ href, children }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm hover:text-blue-800">{children}</a>
-                    ),
-                    hr: () => (
-                      <hr className="border-gray-200 my-6" />
-                    ),
+                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
+                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
+                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
+                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
+                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
+                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
+                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
+                    tr: ({ children }) => <tr style={{ ['&:hover' as string]: { backgroundColor: C.selectedBg } }}>{children}</tr>,
+                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
+                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                   }}
                 >
                   {businessPlans[currentPlanIndex].content}
                 </ReactMarkdown>
               </div>
 
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <button
-                  onClick={reset}
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  새로 시작
-                </button>
-                <button
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                  제일 위로
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                  위로
                 </button>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'md')}
-                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                  >
-                    마크다운으로 저장
-                  </button>
-                  <button
-                    onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')}
-                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                  >
-                    워드 파일로 저장
-                  </button>
+                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap justify-center gap-3">
-                <button
-                  onClick={() => generatePRD()}
-                  className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-                >
+                <button onClick={() => generatePRD()} className="px-7 py-2.5 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: C.textDark, color: C.cream }}>
                   개발문서(PRD) 생성하기
                 </button>
-                <button
-                  onClick={() => generateFullPlan()}
-                  className="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
-                >
-                  풀버전 사업기획서 생성하기 (에이전트 팀)
+                <button onClick={() => generateFullPlan()} className="px-7 py-2.5 rounded-xl text-sm font-semibold transition" style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff', boxShadow: `0 4px 12px rgba(194,75,37,0.25)` }}>
+                  풀버전 사업기획서 생성 (에이전트 팀)
                 </button>
               </div>
             </div>
@@ -1506,55 +1443,42 @@ export default function WorkflowPage() {
 
         {/* Step: Generating PRD */}
         {step === 'generating-prd' && (
-          <div className="bg-white rounded-lg shadow p-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">개발문서(PRD) 작성 중</h2>
-
-            {/* Time info */}
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h2 className="text-xl font-semibold mb-5" style={{ color: C.textDark }}>개발문서(PRD) 작성 중</h2>
             <div className="flex gap-8 mb-5">
               <div>
-                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
-                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
+                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
               </div>
               {etaSeconds !== null && (
                 <div>
-                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
-                  <div className="font-mono text-base font-semibold text-indigo-600">
+                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
+                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
                     {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
-              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
-              <span className="font-medium text-indigo-600">
-                {Math.round((progressCurrent / progressTotal) * 100)}%
-              </span>
+              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
-              <div
-                className="bg-indigo-600 h-2 rounded-full transition-all duration-700 ease-in-out"
-                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
-              />
+            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
+              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
             </div>
-
-            {/* Completed steps */}
             <div className="space-y-2 mb-4">
               {completedSteps.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   {msg}
                 </div>
               ))}
             </div>
-
-            {/* Current step */}
             {progressCurrent < progressTotal && (
-              <div className="flex items-center gap-2 text-sm text-indigo-600">
-                <div className="animate-spin w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full flex-shrink-0" />
+              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
+                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
                 {loadingMessage || 'PRD 초안을 작성하는 중입니다...'}
               </div>
             )}
@@ -1563,59 +1487,46 @@ export default function WorkflowPage() {
 
         {/* Step: Generating Full Plan */}
         {step === 'generating-full-plan' && (
-          <div className="bg-white rounded-lg shadow p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">풀버전 사업기획서 작성 중</h2>
-              <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">에이전트 팀</span>
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-xl font-semibold" style={{ color: C.textDark }}>풀버전 사업기획서 작성 중</h2>
+              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full" style={{ backgroundColor: C.selectedBg, color: C.accent, border: `1px solid ${C.border}` }}>에이전트 팀</span>
             </div>
-            <p className="text-sm text-gray-500 mb-5">4개 전문 에이전트가 순차적으로 각 섹션을 심층 분석합니다.</p>
-
-            {/* Time info */}
+            <p className="text-sm mb-5" style={{ color: C.textMid }}>4개 전문 에이전트가 순차적으로 각 섹션을 심층 분석합니다.</p>
             <div className="flex gap-8 mb-5">
               <div>
-                <div className="text-xs text-gray-400 mb-0.5">경과 시간</div>
-                <div className="font-mono text-base font-semibold text-gray-700">{formatTime(elapsedSeconds)}</div>
+                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
+                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
               </div>
               {etaSeconds !== null && (
                 <div>
-                  <div className="text-xs text-gray-400 mb-0.5">예상 완료</div>
-                  <div className="font-mono text-base font-semibold text-purple-600">
+                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
+                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
                     {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Progress bar */}
             <div className="mb-1 flex justify-between items-center text-sm">
-              <span className="text-gray-500">{progressCurrent} / {progressTotal}단계 완료</span>
-              <span className="font-medium text-purple-600">
-                {Math.round((progressCurrent / progressTotal) * 100)}%
-              </span>
+              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-6">
-              <div
-                className="bg-purple-600 h-2 rounded-full transition-all duration-700 ease-in-out"
-                style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%` }}
-              />
+            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
+              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
             </div>
-
-            {/* Completed steps */}
             <div className="space-y-2 mb-4">
               {completedSteps.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-gray-500">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   {msg}
                 </div>
               ))}
             </div>
-
-            {/* Current step */}
             {progressCurrent < progressTotal && (
-              <div className="flex items-center gap-2 text-sm text-purple-600">
-                <div className="animate-spin w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full flex-shrink-0" />
+              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
+                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
                 {loadingMessage}
               </div>
             )}
@@ -1624,167 +1535,82 @@ export default function WorkflowPage() {
 
         {/* Step: View Full Plan */}
         {step === 'view-full-plan' && fullBusinessPlans.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-8">
-            {/* Tabs: 생성된 풀버전 + 미생성 초안 */}
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {(() => {
-              const draftsWithoutFull = businessPlans.filter(
-                draft => !fullBusinessPlans.some(fp => fp.ideaId === draft.ideaId)
-              );
+              const draftsWithoutFull = businessPlans.filter(draft => !fullBusinessPlans.some(fp => fp.ideaId === draft.ideaId));
               const showTabs = fullBusinessPlans.length > 1 || draftsWithoutFull.length > 0;
               return showTabs ? (
                 <div className="flex flex-wrap gap-2 mb-6">
                   {fullBusinessPlans.map((plan, idx) => (
-                    <button
-                      key={plan.ideaId}
-                      onClick={() => setCurrentFullPlanIndex(idx)}
-                      className={`px-4 py-2 rounded-lg whitespace-nowrap text-sm ${
-                        currentFullPlanIndex === idx
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {plan.ideaName}
-                    </button>
+                    <button key={plan.ideaId} onClick={() => setCurrentFullPlanIndex(idx)}
+                      className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition"
+                      style={currentFullPlanIndex === idx
+                        ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                        : { backgroundColor: '#F0D5C0', color: C.textMid }
+                      }
+                    >{plan.ideaName}</button>
                   ))}
                   {draftsWithoutFull.map(draft => (
-                    <button
-                      key={draft.ideaId}
-                      onClick={() => generateFullPlan(draft)}
-                      className="px-4 py-2 rounded-lg whitespace-nowrap text-sm border-2 border-dashed border-purple-300 text-purple-500 hover:bg-purple-50 transition"
-                    >
-                      {draft.ideaName} — 풀버전 생성
-                    </button>
+                    <button key={draft.ideaId} onClick={() => generateFullPlan(draft)}
+                      className="px-4 py-2 rounded-xl text-sm whitespace-nowrap transition"
+                      style={{ border: `2px dashed ${C.border}`, color: C.textMid, backgroundColor: 'transparent' }}
+                    >{draft.ideaName} — 풀버전 생성</button>
                   ))}
                 </div>
               ) : null;
             })()}
 
-            {/* Current Full Plan */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold">{fullBusinessPlans[currentFullPlanIndex].ideaName}</h2>
-                  <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">Full Version</span>
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold" style={{ color: C.textDark }}>{fullBusinessPlans[currentFullPlanIndex].ideaName}</h2>
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full" style={{ backgroundColor: C.selectedBg, color: C.accent, border: `1px solid ${C.border}` }}>Full Version</span>
                 </div>
-                <button
-                  onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  제일 아래로
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                <button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition"
+                  style={{ border: `1px solid ${C.border}`, color: C.textMid }}
+                >아래로 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></button>
               </div>
 
               <div className="mb-6">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    h2: ({ children }) => (
-                      <div className="bg-purple-800 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
-                        {children}
-                      </div>
-                    ),
-                    h3: ({ children }) => (
-                      <div className="bg-purple-50 text-purple-800 px-4 py-2 border-l-4 border-purple-500 font-semibold text-base mt-5 mb-2">
-                        {children}
-                      </div>
-                    ),
-                    h4: ({ children }) => (
-                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
-                        {children}
-                      </div>
-                    ),
-                    p: ({ children }) => (
-                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="text-sm text-gray-700 leading-7">{children}</li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-bold text-gray-900">{children}</strong>
-                    ),
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="w-full border-collapse text-sm">{children}</table>
-                      </div>
-                    ),
-                    thead: ({ children }) => (
-                      <thead className="bg-purple-50">{children}</thead>
-                    ),
-                    tbody: ({ children }) => (
-                      <tbody className="divide-y divide-gray-200">{children}</tbody>
-                    ),
-                    tr: ({ children }) => (
-                      <tr className="hover:bg-gray-50">{children}</tr>
-                    ),
-                    th: ({ children }) => (
-                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
-                    ),
-                    a: ({ href, children }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-600 underline text-sm hover:text-purple-800">{children}</a>
-                    ),
-                    hr: () => (
-                      <hr className="border-gray-200 my-6" />
-                    ),
+                    h2: ({ children }) => <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>{children}</div>,
+                    h3: ({ children }) => <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>{children}</div>,
+                    h4: ({ children }) => <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>{children}</div>,
+                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
+                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
+                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
+                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
+                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
+                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
+                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
+                    tr: ({ children }) => <tr>{children}</tr>,
+                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
+                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                   }}
                 >
                   {fullBusinessPlans[currentFullPlanIndex].content}
                 </ReactMarkdown>
               </div>
 
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <button
-                  onClick={() => setStep('view-plan')}
-                  className="px-6 py-3 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 transition"
-                >
-                  초안 보기
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                <button onClick={() => setStep('view-plan')} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>초안 보기</button>
+                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>위로
                 </button>
-                <button
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                  제일 위로
-                </button>
-                <button
-                  onClick={reset}
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  새로 시작
-                </button>
+                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')}
-                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                  >
-                    마크다운으로 저장
-                  </button>
-                  <button
-                    onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')}
-                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                  >
-                    워드 파일로 저장
-                  </button>
+                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex justify-center">
-                <button
-                  onClick={() => generatePRD(fullBusinessPlans[currentFullPlanIndex], 'view-full-plan')}
-                  className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-                >
+                <button onClick={() => generatePRD(fullBusinessPlans[currentFullPlanIndex], 'view-full-plan')} className="px-7 py-2.5 rounded-xl text-sm font-semibold" style={{ backgroundColor: C.textDark, color: C.cream }}>
                   개발문서(PRD) 생성하기
                 </button>
               </div>
@@ -1794,196 +1620,90 @@ export default function WorkflowPage() {
 
         {/* Step: View PRD */}
         {step === 'view-prd' && prds.length > 0 && (
-          <div className="bg-white rounded-lg shadow p-8">
-            {/* PRD Tabs (여러 아이디어 선택 시) */}
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {prds.length > 1 && (
-              <div className="flex space-x-2 mb-6 overflow-x-auto">
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
                 {prds.map((prd, idx) => (
-                  <button
-                    key={prd.ideaId}
-                    onClick={() => setCurrentPRDIndex(idx)}
-                    className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                      currentPRDIndex === idx
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {prd.ideaName}
-                  </button>
+                  <button key={prd.ideaId} onClick={() => setCurrentPRDIndex(idx)}
+                    className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition"
+                    style={currentPRDIndex === idx
+                      ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                      : { backgroundColor: '#F0D5C0', color: C.textMid }
+                    }
+                  >{prd.ideaName}</button>
                 ))}
               </div>
             )}
 
-            {/* Current PRD */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {prds[currentPRDIndex].ideaName} PRD
-                </h2>
-                <button
-                  onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  제일 아래로
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-bold" style={{ color: C.textDark }}>{prds[currentPRDIndex].ideaName} PRD</h2>
+                <button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition"
+                  style={{ border: `1px solid ${C.border}`, color: C.textMid }}
+                >아래로 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></button>
               </div>
 
-              {/* 포맷 선택 토글 */}
-              <div className="flex items-center gap-2 mb-4">
-                <button
-                  onClick={() => setPrdFormat('markdown')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
-                    prdFormat === 'markdown'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  마크다운 (개발자용)
-                </button>
-                <button
-                  onClick={() => setPrdFormat('plain')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
-                    prdFormat === 'plain'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  AI용 서식
-                </button>
+              {/* 포맷 토글 */}
+              <div className="flex items-center gap-2 mb-5">
+                {(['markdown', 'plain'] as const).map(fmt => (
+                  <button key={fmt} onClick={() => setPrdFormat(fmt)}
+                    className="px-4 py-1.5 rounded-xl text-sm font-medium transition"
+                    style={prdFormat === fmt
+                      ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                      : { backgroundColor: '#F0D5C0', color: C.textMid }
+                    }
+                  >{fmt === 'markdown' ? '마크다운 (개발자용)' : 'AI용 서식'}</button>
+                ))}
                 {prdFormat === 'plain' && (
-                  <button
-                    onClick={() => copyToClipboard(stripMarkdownForAI(prds[currentPRDIndex].content))}
-                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 transition"
+                  <button onClick={() => copyToClipboard(stripMarkdownForAI(prds[currentPRDIndex].content))}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-xl transition"
+                    style={{ border: `1px solid ${C.border}`, color: prdCopied ? '#3D6B3A' : C.textMid }}
                   >
-                    {prdCopied ? (
-                      <>
-                        <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        복사됨
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        클립보드 복사
-                      </>
-                    )}
+                    {prdCopied
+                      ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>복사됨</>
+                      : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>클립보드 복사</>
+                    }
                   </button>
                 )}
               </div>
 
               <div className="mb-6">
                 {prdFormat === 'plain' ? (
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-4 leading-6">
+                  <pre className="whitespace-pre-wrap font-mono text-sm leading-6 rounded-xl p-4" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
                     {stripMarkdownForAI(prds[currentPRDIndex].content)}
                   </pre>
                 ) : (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h2: ({ children }) => (
-                      <div className="bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-lg mt-8 mb-3">
-                        {children}
-                      </div>
-                    ),
-                    h3: ({ children }) => (
-                      <div className="bg-indigo-50 text-indigo-800 px-4 py-2 border-l-4 border-indigo-500 font-semibold text-base mt-5 mb-2">
-                        {children}
-                      </div>
-                    ),
-                    h4: ({ children }) => (
-                      <div className="border-l-4 border-gray-400 pl-3 font-semibold text-gray-700 text-sm mt-4 mb-1">
-                        {children}
-                      </div>
-                    ),
-                    p: ({ children }) => (
-                      <p className="text-sm text-gray-700 leading-7 my-2">{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>
-                    ),
-                    li: ({ children }) => (
-                      <li className="text-sm text-gray-700 leading-7">{children}</li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-bold text-gray-900">{children}</strong>
-                    ),
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="w-full border-collapse text-sm">{children}</table>
-                      </div>
-                    ),
-                    thead: ({ children }) => (
-                      <thead className="bg-indigo-50">{children}</thead>
-                    ),
-                    tbody: ({ children }) => (
-                      <tbody className="divide-y divide-gray-200">{children}</tbody>
-                    ),
-                    tr: ({ children }) => (
-                      <tr className="hover:bg-gray-50">{children}</tr>
-                    ),
-                    th: ({ children }) => (
-                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-800 text-sm">{children}</th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-gray-300 px-3 py-2 text-gray-700 text-sm leading-6">{children}</td>
-                    ),
-                    a: ({ href, children }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline text-sm hover:text-indigo-800">{children}</a>
-                    ),
-                    hr: () => (
-                      <hr className="border-gray-200 my-6" />
-                    ),
-                  }}
-                >
-                  {prds[currentPRDIndex].content}
-                </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                    h2: ({ children }) => <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>{children}</div>,
+                    h3: ({ children }) => <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>{children}</div>,
+                    h4: ({ children }) => <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>{children}</div>,
+                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
+                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
+                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
+                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
+                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
+                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
+                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
+                    tr: ({ children }) => <tr>{children}</tr>,
+                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
+                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                  }}>{prds[currentPRDIndex].content}</ReactMarkdown>
                 )}
               </div>
 
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <button
-                  onClick={() => setStep('view-plan')}
-                  className="px-6 py-3 border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 transition"
-                >
-                  사업기획서로 돌아가기
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                <button onClick={() => setStep('view-plan')} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>사업기획서로 돌아가기</button>
+                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>위로
                 </button>
-                <button
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                  제일 위로
-                </button>
-                <button
-                  onClick={reset}
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  새로 시작
-                </button>
+                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'md')}
-                    className="px-5 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                  >
-                    마크다운으로 저장
-                  </button>
-                  <button
-                    onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')}
-                    className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                  >
-                    워드 파일로 저장
-                  </button>
+                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
             </div>
@@ -1994,54 +1714,32 @@ export default function WorkflowPage() {
       {/* Save Dialog Modal */}
       {showSaveDialog && pendingPlan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-96">
-            <h3 className="text-lg font-semibold text-gray-900 mb-5">
-              {pendingFileFormat === 'md' ? '마크다운으로 저장' : '워드 파일로 저장'}
+          <div className="rounded-2xl shadow-2xl p-6 w-96" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h3 className="text-base font-semibold mb-5" style={{ color: C.textDark }}>
+              {pendingFileFormat === 'md' ? '마크다운(.md)으로 저장' : '워드(.docx) 파일로 저장'}
             </h3>
-
             <div className="mb-4">
-              <div className="text-xs text-gray-500 mb-1">파일명</div>
-              <div className="text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+              <div className="text-xs mb-1" style={{ color: C.textLight }}>파일명</div>
+              <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
                 {(() => {
-                  const prefix = pendingPlanType === 'prd'
-                    ? 'PRD'
-                    : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
+                  const prefix = pendingPlanType === 'prd' ? 'PRD' : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
                   const base = keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}` : `${prefix}_${pendingPlan.ideaName}`;
                   return `${base}.${pendingFileFormat}`;
                 })()}
               </div>
             </div>
-
             <div className="mb-6">
-              <div className="text-xs text-gray-500 mb-1">저장 위치</div>
+              <div className="text-xs mb-1" style={{ color: C.textLight }}>저장 위치</div>
               <div className="flex items-center gap-2">
-                <div className="flex-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200 truncate">
-                  {dirName}
-                </div>
+                <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>{dirName}</div>
                 {'showDirectoryPicker' in window && (
-                  <button
-                    onClick={handlePickFolder}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap"
-                  >
-                    변경
-                  </button>
+                  <button onClick={handlePickFolder} className="px-3 py-2 text-sm rounded-lg whitespace-nowrap transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>변경</button>
                 )}
               </div>
             </div>
-
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowSaveDialog(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={executeSave}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-              >
-                저장
-              </button>
+              <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>취소</button>
+              <button onClick={executeSave} className="px-5 py-2 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>저장</button>
             </div>
           </div>
         </div>
