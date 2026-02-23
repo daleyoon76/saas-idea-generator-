@@ -42,6 +42,3 @@ next-env.d.ts
 
 # Claude Code
 .claude/
-
-# Generated output
-generated reports/
