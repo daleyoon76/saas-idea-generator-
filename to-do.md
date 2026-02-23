@@ -6,15 +6,13 @@
   - 메인 페이지 UI와 디자인을 참고할 수 있는 10개의 웹페이지를 찾아서 검토
   - 선정 페이지의 global CSS 추출해서 이 서비스 페이지 디자인에 반영
 
-- [ ] **기존 기획서 Import → 워크플로우 중간 진입 기능**
-  - 기존 사업기획서(.md/.docx/.txt)를 업로드하면 워크플로우 중간 단계로 진입
-  - **진입 경로 A**: 기획서 Import → 에이전트 팀이 심화 분석·보강 → 강화된 기획서 출력
-  - **진입 경로 B**: 기획서 Import → 바로 PRD 생성
-  - 워크플로우 설계 고려사항:
-    - 랜딩 or 키워드 입력 단계에서 "기존 기획서로 시작" 진입점 제공
-    - Import된 기획서를 파싱하여 기존 `BusinessPlan` 구조에 매핑
-    - 에이전트 팀 심화 모드: 기존 내용을 컨텍스트로 받아 부족한 부분 보강·검증
-    - view-plan 단계로 자연스럽게 합류 (이후 PRD 생성·저장 등 기존 플로우 재사용)
+- [x] **기존 기획서 Import → 워크플로우 중간 진입 기능**
+  - 키워드 단계에서 탭 전환으로 "기존 기획서 가져오기" 진입
+  - 파일 업로드(.md/.txt/.docx) + 드래그앤드롭 + 텍스트 붙여넣기
+  - LLM으로 기획서에서 Idea 구조체 자동 추출 (`extract-idea` API)
+  - Import 후 view-plan 합류 → 기존 PRD 생성 / 풀버전 에이전트 팀 재사용
+  - 에이전트 팀 심화 모드: 기존 기획서를 컨텍스트로 전달하여 보강·검증
+  - .docx 파싱용 `/api/parse-docx` (mammoth 라이브러리)
 
 - [ ] **Phase 3: Google API 연동**
   - Google OAuth 2.0 인증, Sheets/Docs 저장
@@ -31,6 +29,12 @@
 - [x] Google Trends 급등 트렌드 수집
 - [x] Product Hunt 트렌딩 제품 수집
 - [x] 4-way 병렬 수집 (Tavily + Reddit + Google Trends + Product Hunt)
+
+### 기획서 Import
+- [x] 기존 기획서 Import 기능 — 탭 전환 UI, 파일 업로드/드래그앤드롭/텍스트 붙여넣기
+- [x] LLM Idea 추출 (`extract-idea` API) → view-plan 합류
+- [x] 에이전트 팀 심화 모드 (기존 기획서를 컨텍스트로 보강)
+- [x] .docx Import 지원 (`/api/parse-docx`, mammoth)
 
 ### 사업기획서 생성
 - [x] 단일 LLM 사업기획서 생성 (초안, 13개 섹션)

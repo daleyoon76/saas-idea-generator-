@@ -1228,39 +1228,59 @@ export default function WorkflowPage() {
 
       <div className="max-w-4xl mx-auto py-10 px-4">
 
-        {/* ── 진행 단계 표시 ─────────────────────────────────────── */}
+        {/* ── 진행 단계 표시 (Phase Indicator) ──────────────────── */}
         <div className="flex justify-center mb-10">
           <div className="flex items-center gap-1">
-            {['키워드 입력', '아이디어 선택', '기획서 작성', '완료'].map((label, idx) => {
-              const stepOrder = ['keyword', 'select-ideas', 'view-plan', 'complete'];
-              // 로딩 중인 스텝은 다음 스텝(도달 예정)으로 매핑
+            {(['키워드 입력', '아이디어 선택', '기획서 초안 작성', '기획서 상세 작성', '개발문서 생성', '완료'] as const).map((label, idx) => {
+              const stepOrder: WorkflowStep[] = ['keyword', 'select-ideas', 'view-plan', 'view-full-plan', 'view-prd', 'complete'];
+              // 로딩 중인 스텝은 도달 예정 단계로 매핑
               const effectiveStep =
                 step === 'generating-ideas' ? 'select-ideas' :
                 step === 'importing-plan' ? 'view-plan' :
-                (step === 'generating-plan' || step === 'generating-full-plan' ||
-                 step === 'generating-prd' || step === 'view-prd' ||
-                 step === 'view-full-plan') ? 'view-plan' : step;
+                step === 'generating-plan' ? 'view-plan' :
+                step === 'generating-full-plan' ? 'view-full-plan' :
+                step === 'generating-prd' ? 'view-prd' : step;
               const currentIdx = stepOrder.indexOf(effectiveStep);
               const isActive = idx <= currentIdx;
+              const isLoading = step.startsWith('generating') || step === 'importing-plan';
+              // 클릭 가능 조건: 이미 지나온 단계 + 로딩 중이 아님 + 데이터 존재
+              const canNavigate = !isLoading && idx <= currentIdx && (
+                idx === 0 ||
+                (idx === 1 && ideas.length > 0) ||
+                (idx === 2 && businessPlans.length > 0) ||
+                (idx === 3 && fullBusinessPlans.length > 0) ||
+                (idx === 4 && prds.length > 0) ||
+                idx === 5
+              );
               return (
                 <div key={label} className="flex items-center">
                   <div className="flex flex-col items-center">
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all"
-                      style={isActive
-                        ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
-                        : { backgroundColor: '#F0D5C0', color: C.textLight }
-                      }
+                      style={{
+                        ...(isActive
+                          ? { background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff' }
+                          : { backgroundColor: '#F0D5C0', color: C.textLight }),
+                        cursor: canNavigate && stepOrder[idx] !== step ? 'pointer' : 'default',
+                      }}
+                      onClick={() => { if (canNavigate) setStep(stepOrder[idx]); }}
                     >
                       {idx + 1}
                     </div>
-                    <span className="mt-1 text-xs" style={{ color: isActive ? C.textDark : C.textLight }}>
+                    <span
+                      className="mt-1 text-xs whitespace-nowrap"
+                      style={{
+                        color: isActive ? C.textDark : C.textLight,
+                        cursor: canNavigate && stepOrder[idx] !== step ? 'pointer' : 'default',
+                      }}
+                      onClick={() => { if (canNavigate) setStep(stepOrder[idx]); }}
+                    >
                       {label}
                     </span>
                   </div>
-                  {idx < 3 && (
+                  {idx < 5 && (
                     <div
-                      className="w-10 h-px mx-2 mb-4"
+                      className="w-6 h-px mx-1 mb-4"
                       style={{ backgroundColor: idx < currentIdx ? C.accent : '#F0D5C0' }}
                     />
                   )}
