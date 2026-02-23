@@ -133,6 +133,35 @@ ${businessPlanContent}
 ${templateSection}`;
 }
 
+// ─── 기획서 Import: Idea 추출 프롬프트 ────────────────────────────────────────
+
+export function createIdeaExtractionPrompt(planContent: string): string {
+  return `한국어로만 답변하세요.
+
+다음 사업기획서에서 핵심 정보를 추출하여 아래 JSON 형식으로 출력하세요.
+기획서에 해당 정보가 명시되지 않은 경우 내용을 바탕으로 합리적으로 추론하세요.
+
+## 사업기획서 내용
+${planContent.slice(0, 15000)}
+
+\`\`\`json
+{
+  "name": "서비스 이름",
+  "category": "B2C 또는 B2B",
+  "oneLiner": "서비스 한 줄 설명",
+  "target": "대상 고객",
+  "problem": "해결하려는 문제",
+  "features": ["핵심 기능1", "핵심 기능2", "핵심 기능3"],
+  "differentiation": "차별화 포인트",
+  "revenueModel": "수익 모델",
+  "mvpDifficulty": "상/중/하 중 하나",
+  "rationale": "이 사업의 핵심 가치와 시장 기회"
+}
+\`\`\`
+
+위 JSON 형식만 출력하세요.`;
+}
+
 // ─── 풀버전 에이전트 팀 프롬프트 ───────────────────────────────────────────
 
 type FullPlanIdea = {
@@ -152,6 +181,16 @@ function buildSearchCtx(searchResults?: SearchResult[]): string {
   return `\n## 시장 조사 자료\n다음은 인터넷 검색을 통해 수집한 최신 시장 정보입니다:\n\n${searchResults.map((r, i) => `${i + 1}. **${r.title}**\n   - URL: ${r.url}\n   - 내용: ${r.snippet}`).join('\n\n')}\n`;
 }
 
+function buildExistingPlanCtx(existingPlanContent?: string): string {
+  if (!existingPlanContent) return '';
+  return `\n## 기존 사업기획서 (심화·보완 대상)
+아래는 사용자가 제공한 기존 기획서입니다. 이 내용을 기반으로 검증·보완·심화하세요.
+기존 내용과 모순되지 않으면서 더 구체적인 근거와 데이터를 추가하세요.
+
+${existingPlanContent.slice(0, 8000)}
+`;
+}
+
 function ideaBlock(idea: FullPlanIdea): string {
   return `## 서비스 정보
 - 서비스명: ${idea.name}
@@ -164,10 +203,11 @@ function ideaBlock(idea: FullPlanIdea): string {
 }
 
 /** Agent 1 — 시장·문제 에이전트: 섹션 2, 3, 8 */
-export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: SearchResult[]): string {
+export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
+${buildExistingPlanCtx(existingPlanContent)}
 
 당신은 시장·트렌드 분석 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
 다른 섹션(1. 핵심요약, 4. 솔루션, 5. 경쟁분석 등)은 절대 포함하지 마세요.
@@ -211,14 +251,14 @@ ${ideaBlock(idea)}
 }
 
 /** Agent 2 — 경쟁·차별화 에이전트: 섹션 5, 6, 7 */
-export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketContent: string, searchResults?: SearchResult[]): string {
+export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
 
 ## 이전 에이전트 분석 결과 (시장·문제·TAM)
 ${marketContent}
-
+${buildExistingPlanCtx(existingPlanContent)}
 당신은 경쟁 분석·포지셔닝 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
 다른 섹션(1. 핵심요약, 2. 트렌드, 3. 문제정의 등)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
@@ -254,7 +294,7 @@ ${marketContent}
 }
 
 /** Agent 3 — 전략·솔루션 에이전트: 섹션 1, 4, 9, 10 */
-export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, searchResults?: SearchResult[]): string {
+export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
@@ -263,7 +303,7 @@ ${ideaBlock(idea)}
 ${marketContent}
 
 ${competitionContent}
-
+${buildExistingPlanCtx(existingPlanContent)}
 당신은 제품 전략·개발 로드맵 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
 다른 섹션(2. 트렌드, 5. 경쟁분석 등)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
@@ -305,7 +345,7 @@ ${competitionContent}
 }
 
 /** Agent 4 — 재무·리스크 에이전트: 섹션 11, 12, 13, 참고문헌 */
-export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, strategyContent: string, searchResults?: SearchResult[]): string {
+export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, strategyContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
@@ -316,7 +356,7 @@ ${marketContent}
 ${competitionContent}
 
 ${strategyContent}
-
+${buildExistingPlanCtx(existingPlanContent)}
 당신은 재무 모델링·리스크 분석 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
 다른 섹션(1~10)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.

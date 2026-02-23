@@ -29,6 +29,7 @@ export interface PRD {
 
 export type WorkflowStep =
   | 'keyword'
+  | 'importing-plan'
   | 'generating-ideas'
   | 'select-ideas'
   | 'generating-plan'

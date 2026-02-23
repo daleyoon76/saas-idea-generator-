@@ -6,7 +6,7 @@ import path from 'path';
 
 export async function POST(req: NextRequest) {
   try {
-    const { content, ideaName } = await req.json();
+    const { content, ideaName, keyword, version } = await req.json();
 
     if (!content || !ideaName) {
       return NextResponse.json({ error: 'content and ideaName are required' }, { status: 400 });
@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
       `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
       `_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const safeName = ideaName.replace(/[/\\?%*:|"<>]/g, '_');
-    const fileName = `사업기획안_${safeName}_${timestamp}.docx`;
+    const keywordPart = keyword ? keyword.replace(/[/\\?%*:|"<>]/g, '_') : '없음';
+    const versionLabel = version === 'full' ? 'Full' : 'Draft';
+    const fileName = `사업기획서_${keywordPart}_${versionLabel}_${safeName}_${timestamp}.docx`;
     const filePath = path.join(outputDir, fileName);
 
     // Write file

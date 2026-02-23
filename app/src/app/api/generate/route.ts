@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, SearchResult } from '@/lib/prompts';
+import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -59,14 +59,27 @@ export async function POST(request: NextRequest) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
     } else if (type === 'generate-prd' && idea) {
       prompt = buildPRDPrompt(idea as Idea, body.businessPlanContent as string || '');
+    } else if (type === 'extract-idea') {
+      const planContent = body.planContent as string;
+      if (!planContent || typeof planContent !== 'string') {
+        return NextResponse.json({ error: 'planContent must be a non-empty string' }, { status: 400 });
+      }
+      if (planContent.length > 100000) {
+        return NextResponse.json({ error: 'planContent exceeds maximum length (100KB)' }, { status: 400 });
+      }
+      prompt = createIdeaExtractionPrompt(planContent);
     } else if (type === 'full-plan-market' && idea) {
-      prompt = createFullPlanMarketPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
+      const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
+      prompt = createFullPlanMarketPrompt(idea as Idea, (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-competition' && idea) {
-      prompt = createFullPlanCompetitionPrompt(idea as Idea, body.marketContent as string || '', (searchResults as SearchResult[]) || []);
+      const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
+      prompt = createFullPlanCompetitionPrompt(idea as Idea, body.marketContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-strategy' && idea) {
-      prompt = createFullPlanStrategyPrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', (searchResults as SearchResult[]) || []);
+      const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
+      prompt = createFullPlanStrategyPrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-finance' && idea) {
-      prompt = createFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || []);
+      const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
+      prompt = createFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else {
       prompt = rawPrompt;
     }
@@ -87,6 +100,7 @@ export async function POST(request: NextRequest) {
       'full-plan-strategy':    18000,
       'full-plan-finance':     18000,
       'generate-prd':          15000,
+      'extract-idea':          4000,
     };
     const maxTokens = TOKEN_LIMITS[type] ?? 9000;
     let response: string;

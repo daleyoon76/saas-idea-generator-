@@ -88,6 +88,12 @@ export default function WorkflowPage() {
   const [pendingFileFormat, setPendingFileFormat] = useState<'docx' | 'md'>('docx');
   // 실측 생성 시간 (아이디어 생성 / 사업기획서 생성 완료 후 표시)
   const [lastGenTime, setLastGenTime] = useState<{ seconds: number; label: string } | null>(null);
+  // 기획서 Import 관련 상태
+  const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
+  const [importMode, setImportMode] = useState<'file' | 'paste' | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     checkProviders();
@@ -725,12 +731,14 @@ export default function WorkflowPage() {
   async function executeSave() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
-    const prefix = pendingPlanType === 'prd'
-      ? 'PRD'
-      : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
-    const baseName = keyword
-      ? `${prefix}_${keyword}_${pendingPlan.ideaName}`
-      : `${prefix}_${pendingPlan.ideaName}`;
+    const keywordPart = keyword || '없음';
+    let baseName: string;
+    if (pendingPlanType === 'prd') {
+      baseName = `PRD_${keywordPart}_${pendingPlan.ideaName}`;
+    } else {
+      const versionLabel = pendingPlan.version === 'full' ? 'Full' : 'Draft';
+      baseName = `사업기획서_${keywordPart}_${versionLabel}_${pendingPlan.ideaName}`;
+    }
 
     let blob: Blob;
     let fileName: string;
@@ -849,7 +857,7 @@ export default function WorkflowPage() {
       const r1 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
       });
       if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
       const marketContent = (await r1.json()).response as string;
@@ -862,7 +870,7 @@ export default function WorkflowPage() {
       const r2 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
       });
       if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
       const competitionContent = (await r2.json()).response as string;
@@ -875,7 +883,7 @@ export default function WorkflowPage() {
       const r3 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
       });
       if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
       const strategyContent = (await r3.json()).response as string;
@@ -888,7 +896,7 @@ export default function WorkflowPage() {
       const r4 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
       });
       if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
       const financeContent = (await r4.json()).response as string;
@@ -1008,6 +1016,133 @@ export default function WorkflowPage() {
     setTimeout(() => setPrdCopied(false), 2000);
   }
 
+  // ── 기획서 Import ─────────────────────────────────────────────────
+  async function handleImportPlan(content: string) {
+    if (!content.trim()) {
+      setError('기획서 내용이 비어있습니다.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setStep('importing-plan');
+    setLoadingMessage('기획서에서 핵심 정보를 추출하는 중...');
+    setProgressCurrent(0);
+    setProgressTotal(1);
+    setCompletedSteps([]);
+    startTimer(15000);
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModels[selectedProvider],
+          type: 'extract-idea',
+          planContent: content,
+        }),
+      });
+
+      if (!res.ok) throw new Error('기획서 분석 실패');
+      const data = await res.json();
+      const response = data.response as string;
+
+      // JSON 파싱 (여러 패턴 시도)
+      let extracted: Record<string, unknown> | null = null;
+      const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        try { extracted = JSON.parse(jsonBlockMatch[1]); } catch { /* ignore */ }
+      }
+      if (!extracted) {
+        const rawMatch = response.match(/\{[\s\S]*"name"[\s\S]*\}/);
+        if (rawMatch) {
+          try { extracted = JSON.parse(rawMatch[0]); } catch { /* ignore */ }
+        }
+      }
+      if (!extracted) {
+        try { extracted = JSON.parse(response); } catch { /* ignore */ }
+      }
+
+      const syntheticIdea: Idea = {
+        id: -1,
+        name: (extracted?.name as string) || '가져온 기획서',
+        category: (extracted?.category as string) || '미분류',
+        oneLiner: (extracted?.oneLiner as string) || '',
+        target: (extracted?.target as string) || '',
+        problem: (extracted?.problem as string) || '',
+        features: (extracted?.features as string[]) || [],
+        differentiation: (extracted?.differentiation as string) || '',
+        revenueModel: (extracted?.revenueModel as string) || '',
+        mvpDifficulty: (extracted?.mvpDifficulty as string) || '중',
+        rationale: (extracted?.rationale as string) || '',
+      };
+
+      const syntheticPlan: BusinessPlan = {
+        ideaId: -1,
+        ideaName: syntheticIdea.name,
+        content,
+        createdAt: new Date().toISOString(),
+        version: 'draft',
+      };
+
+      setImportedPlanContent(content);
+      setIdeas([syntheticIdea]);
+      setSelectedIdeas([-1]);
+      setBusinessPlans([syntheticPlan]);
+      setCurrentPlanIndex(0);
+      setProgressCurrent(1);
+      setCompletedSteps(['기획서 분석 완료']);
+      setStep('view-plan');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setStep('keyword');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+      stopTimer();
+    }
+  }
+
+  async function processImportFile(file: File) {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['md', 'txt', 'docx'].includes(ext || '')) {
+      setError('.md, .txt 또는 .docx 파일만 지원합니다.');
+      return;
+    }
+
+    if (ext === 'docx') {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/parse-docx', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('DOCX 파싱 실패');
+        const data = await res.json();
+        handleImportPlan(data.text);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'DOCX 파일 읽기 실패');
+      }
+      return;
+    }
+
+    const text = await file.text();
+    handleImportPlan(text);
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImportFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processImportFile(file);
+  }
+
   function reset() {
     stopTimer();
     setStep('keyword');
@@ -1022,6 +1157,9 @@ export default function WorkflowPage() {
     setCurrentPRDIndex(0);
     setError(null);
     setRawResponse('');
+    setImportedPlanContent(null);
+    setImportMode(null);
+    setPasteText('');
   }
 
   // ── 캐니언 컬러 팔레트 ──────────────────────────────────────
@@ -1098,6 +1236,7 @@ export default function WorkflowPage() {
               // 로딩 중인 스텝은 다음 스텝(도달 예정)으로 매핑
               const effectiveStep =
                 step === 'generating-ideas' ? 'select-ideas' :
+                step === 'importing-plan' ? 'view-plan' :
                 (step === 'generating-plan' || step === 'generating-full-plan' ||
                  step === 'generating-prd' || step === 'view-prd' ||
                  step === 'view-full-plan') ? 'view-plan' : step;
@@ -1214,41 +1353,207 @@ export default function WorkflowPage() {
               </div>
             </div>
 
-            <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
-              서비스 아이템을 브레인스토밍해보려고 합니다
-            </h2>
-            <p className="mb-6 text-sm" style={{ color: C.textMid }}>
-              특별히 원하는 키워드가 있으면 넣어주세요. (옵션 — 비워두면 AI가 자동 선정)
-            </p>
-            <input
-              type="text"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && isProviderReady()) generateIdeas(); }}
-              placeholder="예: AI, 헬스케어, 교육, 생산성..."
-              className="w-full px-4 py-3 rounded-xl outline-none transition"
-              style={{
-                border: `1.5px solid ${C.border}`,
-                backgroundColor: '#fff',
-                color: C.textDark,
-              }}
-              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
-              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
-            />
-            <div className="mt-6 flex justify-end">
+            {/* ── 시작 방법 선택 탭 ──────────────────────────────── */}
+            <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ backgroundColor: '#F0D5C0' }}>
               <button
-                onClick={generateIdeas}
-                disabled={!isProviderReady()}
-                className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`,
-                  color: '#fff',
-                  boxShadow: `0 4px 16px rgba(194,75,37,0.3)`,
-                }}
+                onClick={() => setImportMode(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={importMode === null
+                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: C.textMid }
+                }
               >
-                아이디어 발굴 시작 →
+                키워드로 아이디어 발굴
+              </button>
+              <button
+                onClick={() => setImportMode('file')}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={importMode !== null
+                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: C.textMid }
+                }
+              >
+                기존 기획서 가져오기
               </button>
             </div>
+
+            {/* ── 키워드 입력 모드 ──────────────────────────────── */}
+            {importMode === null && (
+              <>
+                <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
+                  서비스 아이템을 브레인스토밍해보려고 합니다
+                </h2>
+                <p className="mb-6 text-sm" style={{ color: C.textMid }}>
+                  특별히 원하는 키워드가 있으면 넣어주세요. (옵션 — 비워두면 AI가 자동 선정)
+                </p>
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && isProviderReady()) generateIdeas(); }}
+                  placeholder="예: AI, 헬스케어, 교육, 생산성..."
+                  className="w-full px-4 py-3 rounded-xl outline-none transition"
+                  style={{
+                    border: `1.5px solid ${C.border}`,
+                    backgroundColor: '#fff',
+                    color: C.textDark,
+                  }}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                  onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+                />
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={generateIdeas}
+                    disabled={!isProviderReady()}
+                    className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`,
+                      color: '#fff',
+                      boxShadow: `0 4px 16px rgba(194,75,37,0.3)`,
+                    }}
+                  >
+                    아이디어 발굴 시작 →
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── 기획서 Import 모드 ──────────────────────────────── */}
+            {importMode !== null && (
+              <>
+                <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
+                  기존 사업기획서 가져오기
+                </h2>
+                <p className="mb-6 text-sm" style={{ color: C.textMid }}>
+                  기존 기획서를 가져오면 AI가 심화 분석하거나, 바로 PRD를 생성할 수 있습니다.
+                </p>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".md,.txt,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => { setImportMode('file'); fileInputRef.current?.click(); }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                    style={importMode === 'file'
+                      ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
+                      : { border: `1.5px solid ${C.border}`, color: C.textMid }
+                    }
+                  >
+                    파일 업로드 (.md, .txt, .docx)
+                  </button>
+                  <button
+                    onClick={() => setImportMode('paste')}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                    style={importMode === 'paste'
+                      ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
+                      : { border: `1.5px solid ${C.border}`, color: C.textMid }
+                    }
+                  >
+                    텍스트 붙여넣기
+                  </button>
+                </div>
+
+                {importMode === 'file' && (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-8 rounded-xl text-center cursor-pointer transition"
+                    style={{
+                      border: `1.5px dashed ${isDragging ? C.accent : C.border}`,
+                      backgroundColor: isDragging ? C.selectedBg : '#fff',
+                    }}
+                  >
+                    <svg className="w-10 h-10 mx-auto mb-3" style={{ color: isDragging ? C.accent : C.textLight }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p className="text-sm mb-1" style={{ color: isDragging ? C.accent : C.textMid }}>
+                      {isDragging ? '여기에 놓으세요' : '파일을 드래그하여 놓거나 클릭하여 선택'}
+                    </p>
+                    <p className="text-xs" style={{ color: C.textLight }}>.md, .txt, .docx 지원</p>
+                  </div>
+                )}
+
+                {importMode === 'paste' && (
+                  <div>
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      placeholder="사업기획서 내용을 여기에 붙여넣으세요..."
+                      className="w-full px-4 py-3 rounded-xl outline-none text-sm resize-y"
+                      style={{
+                        border: `1.5px solid ${C.border}`,
+                        minHeight: '180px',
+                        color: C.textDark,
+                        backgroundColor: '#fff',
+                      }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                      onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+                    />
+                    <div className="flex justify-end mt-4">
+                      <button
+                        onClick={() => handleImportPlan(pasteText)}
+                        disabled={!pasteText.trim() || !isProviderReady()}
+                        className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff', boxShadow: `0 4px 16px rgba(194,75,37,0.3)` }}
+                      >
+                        기획서 분석 시작 →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Step: Importing Plan */}
+        {step === 'importing-plan' && (
+          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+            <h2 className="text-xl font-semibold mb-5" style={{ color: C.textDark }}>기획서 분석 중</h2>
+            <div className="flex gap-8 mb-5">
+              <div>
+                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
+                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
+              </div>
+              {etaSeconds !== null && (
+                <div>
+                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
+                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
+                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mb-1 flex justify-between items-center text-sm">
+              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
+              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
+            </div>
+            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
+              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
+            </div>
+            <div className="space-y-2 mb-4">
+              {completedSteps.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {msg}
+                </div>
+              ))}
+            </div>
+            {progressCurrent < progressTotal && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
+                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
+                {loadingMessage}
+              </div>
+            )}
           </div>
         )}
 
@@ -1450,7 +1755,7 @@ export default function WorkflowPage() {
 
         {/* Step: View Plan */}
         {step === 'view-plan' && businessPlans.length > 0 && (
-          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl p-8 overflow-hidden" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {/* Plan Tabs */}
             {businessPlans.length > 1 && (
               <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
@@ -1477,11 +1782,15 @@ export default function WorkflowPage() {
                   <h2 className="text-xl font-bold" style={{ color: C.textDark }}>
                     {businessPlans[currentPlanIndex].ideaName}
                   </h2>
-                  {lastGenTime && (
+                  {importedPlanContent ? (
+                    <span className="text-xs mt-1 inline-block px-2 py-0.5 rounded-full" style={{ backgroundColor: C.selectedBg, color: C.accent, border: `1px solid ${C.border}` }}>
+                      가져온 기획서
+                    </span>
+                  ) : lastGenTime ? (
                     <span className="text-xs mt-1 inline-block" style={{ color: C.textLight }}>
                       ⚡ {lastGenTime.label}으로 {formatTime(lastGenTime.seconds)} 만에 생성
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <button
                   onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
@@ -1491,7 +1800,7 @@ export default function WorkflowPage() {
                   아래로 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
               </div>
-              <div className="mb-6">
+              <div className="mb-6" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', overflow: 'hidden' }}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -1646,7 +1955,7 @@ export default function WorkflowPage() {
 
         {/* Step: View Full Plan */}
         {step === 'view-full-plan' && fullBusinessPlans.length > 0 && (
-          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl p-8 overflow-hidden" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {(() => {
               const draftsWithoutFull = businessPlans.filter(draft => !fullBusinessPlans.some(fp => fp.ideaId === draft.ideaId));
               const showTabs = fullBusinessPlans.length > 1 || draftsWithoutFull.length > 0;
@@ -1683,7 +1992,7 @@ export default function WorkflowPage() {
                 >아래로 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></button>
               </div>
 
-              <div className="mb-6">
+              <div className="mb-6" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', overflow: 'hidden' }}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -1731,7 +2040,7 @@ export default function WorkflowPage() {
 
         {/* Step: View PRD */}
         {step === 'view-prd' && prds.length > 0 && (
-          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+          <div className="rounded-2xl p-8 overflow-hidden" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
             {prds.length > 1 && (
               <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
                 {prds.map((prd, idx) => (

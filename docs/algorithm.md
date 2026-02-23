@@ -6,13 +6,14 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-22
+> 마지막 업데이트: 2026-02-23
 
 ---
 
 ## 전체 흐름
 
 ```
+[경로 A: 키워드 기반 — 기존]
 키워드 입력
   → [검색: Tavily + Reddit + Google Trends + Product Hunt 4-way 병렬]
   → 아이디어 생성(LLM)
@@ -20,6 +21,14 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
   → [검색: Tavily 5개 쿼리]
   → 사업기획서 초안 생성(LLM, 단일 호출)
   → (선택) 풀버전 사업기획서 생성(에이전트 팀, 4개 LLM 순차 호출)
+  → (선택) PRD 생성(LLM, 단일 호출)
+  → 결과 출력 (.md / .docx 저장)
+
+[경로 B: 기획서 Import — 신규]
+기존 기획서 업로드 (.md/.txt) 또는 텍스트 붙여넣기
+  → Idea 구조체 추출(LLM, extract-idea)
+  → view-plan 합류 (기존 기획서를 초안으로 표시)
+  → (선택) 풀버전 사업기획서 생성(에이전트 팀 + 기존 기획서 컨텍스트)
   → (선택) PRD 생성(LLM, 단일 호출)
   → 결과 출력 (.md / .docx 저장)
 ```
@@ -45,10 +54,11 @@ description: "아이디어 생성 및 사업기획서 생성의 단계별 데이
 | `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults`, `trendsResults`, `productHuntResults` |
 | `business-plan` | `bizplan-template.md` 읽기 → `createBusinessPlanPrompt()` 호출 | `idea`, `searchResults` |
 | `generate-prd` | `prd-template.md` 읽기 → `createPRDPrompt()` 호출 | `idea`, `businessPlanContent` |
-| `full-plan-market` | `createFullPlanMarketPrompt()` 직접 호출 | `idea`, `searchResults` |
-| `full-plan-competition` | `createFullPlanCompetitionPrompt()` 직접 호출 | `idea`, `marketContent`, `searchResults` |
-| `full-plan-strategy` | `createFullPlanStrategyPrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `searchResults` |
-| `full-plan-finance` | `createFullPlanFinancePrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `strategyContent`, `searchResults` |
+| `full-plan-market` | `createFullPlanMarketPrompt()` 직접 호출 | `idea`, `searchResults`, `existingPlanContent?` |
+| `full-plan-competition` | `createFullPlanCompetitionPrompt()` 직접 호출 | `idea`, `marketContent`, `searchResults`, `existingPlanContent?` |
+| `full-plan-strategy` | `createFullPlanStrategyPrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `searchResults`, `existingPlanContent?` |
+| `full-plan-finance` | `createFullPlanFinancePrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `strategyContent`, `searchResults`, `existingPlanContent?` |
+| `extract-idea` | `createIdeaExtractionPrompt()` 직접 호출 | `planContent` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
 - `business-plan`, `generate-prd`, `full-plan-*` → `maxTokens: 16000`
