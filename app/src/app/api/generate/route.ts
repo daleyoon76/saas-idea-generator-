@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
         break;
       case 'gemini':
-        response = await generateWithGemini(model || 'gemini-2.0-flash', prompt, maxTokens, jsonMode);
+        response = await generateWithGemini(model || 'gemini-2.5-flash', prompt, maxTokens, jsonMode);
         break;
       case 'openai':
         response = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
