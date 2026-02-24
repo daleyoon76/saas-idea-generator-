@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CANYON } from "@/lib/colors";
 
 const features = [
   {
@@ -82,13 +83,13 @@ const steps = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FDF5EE" }}>
+    <div className="min-h-screen" style={{ backgroundColor: CANYON.bg }}>
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section
         className="relative overflow-hidden"
         style={{
-          background: "linear-gradient(135deg, #1A0503 0%, #3D1008 30%, #6B2015 60%, #8B3520 80%, #C24B25 100%)",
+          background: `linear-gradient(135deg, ${CANYON.heroBlack} 0%, ${CANYON.textDark} 30%, ${CANYON.deepRed} 60%, ${CANYON.mediumRed} 80%, ${CANYON.accent} 100%)`,
         }}
       >
         {/* Ambient glow blobs — canyon light beams */}
@@ -96,17 +97,17 @@ export default function Home() {
           {/* Amber light beam — center top */}
           <div
             className="animate-blob absolute top-0 left-1/2 -translate-x-1/2 w-64 h-96 rounded-full filter blur-3xl opacity-30"
-            style={{ background: "#F5901E" }}
+            style={{ background: CANYON.amber }}
           />
           {/* Terracotta glow — left */}
           <div
             className="animate-blob animation-delay-2000 absolute -top-20 -left-20 w-80 h-80 rounded-full filter blur-3xl opacity-20"
-            style={{ background: "#C24B25" }}
+            style={{ background: CANYON.accent }}
           />
           {/* Sandy warm — bottom right */}
           <div
             className="animate-blob animation-delay-4000 absolute bottom-0 right-0 w-72 h-72 rounded-full filter blur-3xl opacity-15"
-            style={{ background: "#FFB347" }}
+            style={{ background: CANYON.amberLight }}
           />
         </div>
 
@@ -125,7 +126,7 @@ export default function Home() {
           <div className="flex items-center gap-2.5">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #F5901E, #FFB347)" }}
+              style={{ background: `linear-gradient(135deg, ${CANYON.amber}, ${CANYON.amberLight})` }}
             >
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -137,8 +138,8 @@ export default function Home() {
             href="/workflow"
             className="px-4 py-2 text-sm rounded-lg border transition backdrop-blur-sm"
             style={{
-              background: "rgba(245, 144, 30, 0.15)",
-              borderColor: "rgba(245, 144, 30, 0.35)",
+              background: `rgba(245, 144, 30, 0.15)`,
+              borderColor: `rgba(245, 144, 30, 0.35)`,
               color: "#FFD0A0",
             }}
           >
@@ -154,19 +155,19 @@ export default function Home() {
             style={{
               background: "rgba(245, 144, 30, 0.12)",
               borderColor: "rgba(245, 144, 30, 0.30)",
-              color: "#F5C49A",
+              color: CANYON.lightAmber,
             }}
           >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#FFB347" }} />
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CANYON.amberLight }} />
             Ollama · Claude · Gemini · GPT-4o 지원
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-bold leading-[1.15] tracking-tight mb-6" style={{ color: "#FDE8D0" }}>
+          <h1 className="text-5xl md:text-6xl font-bold leading-[1.15] tracking-tight mb-6" style={{ color: CANYON.cream }}>
             AI가 발굴하는<br />
             <span
               className="bg-clip-text text-transparent"
               style={{
-                backgroundImage: "linear-gradient(90deg, #FFB347 0%, #F5901E 40%, #FDE8D0 100%)",
+                backgroundImage: `linear-gradient(90deg, ${CANYON.amberLight} 0%, ${CANYON.amber} 40%, ${CANYON.cream} 100%)`,
               }}
             >
               유망 SaaS 아이디어
@@ -183,8 +184,8 @@ export default function Home() {
               href="/workflow"
               className="inline-flex items-center gap-2 px-8 py-4 font-semibold rounded-xl transition text-base shadow-2xl"
               style={{
-                background: "linear-gradient(135deg, #F5901E, #FFB347)",
-                color: "#1A0503",
+                background: `linear-gradient(135deg, ${CANYON.amber}, ${CANYON.amberLight})`,
+                color: CANYON.heroBlack,
                 boxShadow: "0 8px 32px rgba(245, 144, 30, 0.45)",
               }}
             >
@@ -201,8 +202,8 @@ export default function Home() {
       {/* ── How it works ─────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-20">
         <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold mb-3" style={{ color: "#3D1008" }}>어떻게 작동하나요?</h2>
-          <p style={{ color: "#8B5A40" }}>4단계로 아이디어 발굴부터 완성된 사업기획서까지</p>
+          <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>어떻게 작동하나요?</h2>
+          <p style={{ color: CANYON.textMid }}>4단계로 아이디어 발굴부터 완성된 사업기획서까지</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -214,7 +215,7 @@ export default function Home() {
                   style={{
                     left: "calc(50% + 24px)",
                     right: "calc(-50% + 24px)",
-                    background: "linear-gradient(90deg, #F5C49A, transparent)",
+                    background: `linear-gradient(90deg, ${CANYON.lightAmber}, transparent)`,
                   }}
                 />
               )}
@@ -222,15 +223,15 @@ export default function Home() {
                 <div
                   className="w-10 h-10 rounded-full font-bold flex items-center justify-center mb-4 text-xs shadow-sm"
                   style={{
-                    background: "linear-gradient(135deg, #FDE8D0, #F5C49A)",
-                    color: "#6B2015",
+                    background: `linear-gradient(135deg, ${CANYON.cream}, ${CANYON.lightAmber})`,
+                    color: CANYON.deepRed,
                     border: "1px solid #F0C0A0",
                   }}
                 >
                   {s.num}
                 </div>
-                <h3 className="font-semibold mb-1.5 text-sm" style={{ color: "#3D1008" }}>{s.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: "#8B5A40" }}>{s.desc}</p>
+                <h3 className="font-semibold mb-1.5 text-sm" style={{ color: CANYON.textDark }}>{s.title}</h3>
+                <p className="text-xs leading-relaxed" style={{ color: CANYON.textMid }}>{s.desc}</p>
               </div>
             </div>
           ))}
@@ -238,11 +239,11 @@ export default function Home() {
       </section>
 
       {/* ── Features ─────────────────────────────────────────────── */}
-      <section className="py-20" style={{ background: "linear-gradient(180deg, #FDF5EE 0%, #FAF0E6 100%)" }}>
+      <section className="py-20" style={{ background: `linear-gradient(180deg, ${CANYON.bg} 0%, ${CANYON.warmBeige} 100%)` }}>
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-3" style={{ color: "#3D1008" }}>주요 기능</h2>
-            <p style={{ color: "#8B5A40" }}>시장 조사부터 PRD까지, 사업 기획의 전 과정을 자동화</p>
+            <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>주요 기능</h2>
+            <p style={{ color: CANYON.textMid }}>시장 조사부터 PRD까지, 사업 기획의 전 과정을 자동화</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -251,22 +252,22 @@ export default function Home() {
                 key={f.title}
                 className="rounded-2xl p-6 hover:-translate-y-0.5 transition-all duration-200"
                 style={{
-                  background: "#FFFAF5",
-                  border: "1px solid #F0D5C0",
+                  background: CANYON.cardBg,
+                  border: `1px solid ${CANYON.border}`,
                   boxShadow: "0 1px 4px rgba(139, 53, 32, 0.06)",
                 }}
               >
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
                   style={{
-                    background: "linear-gradient(135deg, #FDE8D0, #F5C49A)",
-                    color: "#C24B25",
+                    background: `linear-gradient(135deg, ${CANYON.cream}, ${CANYON.lightAmber})`,
+                    color: CANYON.accent,
                   }}
                 >
                   {f.icon}
                 </div>
-                <h3 className="font-semibold mb-2 text-sm" style={{ color: "#3D1008" }}>{f.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: "#8B5A40" }}>{f.description}</p>
+                <h3 className="font-semibold mb-2 text-sm" style={{ color: CANYON.textDark }}>{f.title}</h3>
+                <p className="text-xs leading-relaxed" style={{ color: CANYON.textMid }}>{f.description}</p>
               </div>
             ))}
           </div>
@@ -276,14 +277,14 @@ export default function Home() {
       {/* ── Bottom CTA ───────────────────────────────────────────── */}
       <section className="py-20 text-center">
         <div className="max-w-2xl mx-auto px-6">
-          <h2 className="text-3xl font-bold mb-3" style={{ color: "#3D1008" }}>지금 바로 시작해보세요</h2>
-          <p className="mb-8" style={{ color: "#8B5A40" }}>키워드 입력 하나로 아이디어에서 사업기획서까지</p>
+          <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>지금 바로 시작해보세요</h2>
+          <p className="mb-8" style={{ color: CANYON.textMid }}>키워드 입력 하나로 아이디어에서 사업기획서까지</p>
           <Link
             href="/workflow"
             className="inline-flex items-center gap-2 px-8 py-4 font-semibold rounded-xl transition"
             style={{
-              background: "linear-gradient(135deg, #C24B25, #F5901E)",
-              color: "#FDE8D0",
+              background: `linear-gradient(135deg, ${CANYON.accent}, ${CANYON.amber})`,
+              color: CANYON.cream,
               boxShadow: "0 4px 20px rgba(194, 75, 37, 0.35)",
             }}
           >
@@ -292,11 +293,11 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
             </svg>
           </Link>
-          <p className="mt-6 text-xs" style={{ color: "#B08060" }}>
+          <p className="mt-6 text-xs" style={{ color: CANYON.textLight }}>
             * Ollama는 로컬에서{" "}
             <code
               className="px-1.5 py-0.5 rounded font-mono"
-              style={{ background: "#F0D5C0", color: "#6B2015" }}
+              style={{ background: CANYON.border, color: CANYON.deepRed }}
             >
               ollama serve
             </code>{" "}
@@ -306,8 +307,8 @@ export default function Home() {
       </section>
 
       {/* ── Footer ───────────────────────────────────────────────── */}
-      <footer style={{ borderTop: "1px solid #F0D5C0" }} className="py-8">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs" style={{ color: "#B08060" }}>
+      <footer style={{ borderTop: `1px solid ${CANYON.border}` }} className="py-8">
+        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs" style={{ color: CANYON.textLight }}>
           <span>SaaS Idea Generator</span>
           <span>Powered by Ollama · Claude · Gemini · GPT-4o</span>
         </div>

@@ -40,6 +40,7 @@ import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
 import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
+import { CANYON, CANYON_DOCX } from '@/lib/colors';
 
 export default function WorkflowPage() {
   const [step, setStep] = useState<WorkflowStep>('keyword');
@@ -284,72 +285,98 @@ export default function WorkflowPage() {
       let parsed = null;
       const response = data.response;
 
+      // trailing comma 제거 + BOM 제거 후 JSON.parse
+      const cleanAndParse = (text: string): unknown | null => {
+        try {
+          const cleaned = text
+            .replace(/^\uFEFF/, '')
+            .replace(/,\s*([\]}])/g, '$1')
+            .trim();
+          return JSON.parse(cleaned);
+        } catch {
+          return null;
+        }
+      };
+
+      // 균형 잡힌 중괄호로 JSON 객체 추출
+      const extractBalancedJson = (text: string): string | null => {
+        const start = text.indexOf('{');
+        if (start === -1) return null;
+        let depth = 0;
+        for (let i = start; i < text.length; i++) {
+          if (text[i] === '{') depth++;
+          else if (text[i] === '}') depth--;
+          if (depth === 0) return text.slice(start, i + 1);
+        }
+        return null;
+      };
+
       // Try 1: Extract from ```json ... ``` block
       const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonBlockMatch) {
-        try {
-          parsed = JSON.parse(jsonBlockMatch[1]);
-        } catch (e) {
-          console.log('JSON block parse failed:', e);
-        }
+        parsed = cleanAndParse(jsonBlockMatch[1]);
+        if (!parsed) console.log('JSON block parse failed');
       }
 
       // Try 2: Extract from ``` ... ``` block
       if (!parsed) {
         const codeBlockMatch = response.match(/```\s*([\s\S]*?)\s*```/);
         if (codeBlockMatch) {
-          try {
-            parsed = JSON.parse(codeBlockMatch[1]);
-          } catch (e) {
-            console.log('Code block parse failed:', e);
-          }
+          parsed = cleanAndParse(codeBlockMatch[1]);
+          if (!parsed) console.log('Code block parse failed');
         }
       }
 
-      // Try 3: Find raw JSON object with "ideas"
+      // Try 3: Find raw JSON object with "ideas" (non-greedy)
       if (!parsed) {
-        const rawJsonMatch = response.match(/\{\s*"ideas"\s*:\s*\[[\s\S]*\]\s*\}/);
+        const rawJsonMatch = response.match(/\{\s*"ideas"\s*:\s*\[[\s\S]*?\]\s*\}/);
         if (rawJsonMatch) {
-          try {
-            parsed = JSON.parse(rawJsonMatch[0]);
-          } catch (e) {
-            console.log('Raw JSON parse failed:', e);
-          }
+          parsed = cleanAndParse(rawJsonMatch[0]);
+          if (!parsed) console.log('Raw JSON regex parse failed');
         }
       }
 
-      // Try 4: Direct JSON parse (for Ollama json mode)
+      // Try 4: Balanced brace extraction (가장 견고한 방법)
       if (!parsed) {
-        try {
-          const directParsed = JSON.parse(response);
-          if (directParsed.ideas && Array.isArray(directParsed.ideas)) {
+        const balancedJson = extractBalancedJson(response);
+        if (balancedJson) {
+          parsed = cleanAndParse(balancedJson);
+          if (!parsed) console.log('Balanced brace parse failed');
+        }
+      }
+
+      // Try 5: Direct JSON parse (for Ollama json mode)
+      if (!parsed) {
+        const directParsed = cleanAndParse(response);
+        if (directParsed && typeof directParsed === 'object') {
+          const obj = directParsed as Record<string, unknown>;
+          if (obj.ideas && Array.isArray(obj.ideas)) {
             parsed = directParsed;
           } else if (Array.isArray(directParsed)) {
             parsed = { ideas: directParsed };
           }
-        } catch (e) {
-          console.log('Direct JSON parse failed:', e);
         }
       }
 
-      // Try 5: Find any JSON array in the response
+      // Try 6: Find any JSON array in the response
       if (!parsed) {
-        const arrayMatch = response.match(/\[[\s\S]*\]/);
+        const arrayMatch = response.match(/\[[\s\S]*?\]/);
         if (arrayMatch) {
-          try {
-            const arr = JSON.parse(arrayMatch[0]);
-            if (Array.isArray(arr) && arr.length > 0) {
-              parsed = { ideas: arr };
-            }
-          } catch (e) {
-            console.log('Array JSON parse failed:', e);
+          const arr = cleanAndParse(arrayMatch[0]);
+          if (Array.isArray(arr) && arr.length > 0) {
+            parsed = { ideas: arr };
           }
         }
       }
 
-      if (parsed && parsed.ideas && Array.isArray(parsed.ideas)) {
+      if (!parsed) {
+        console.error('All JSON parsing attempts failed. Raw response:', response.slice(0, 500));
+      }
+
+      const parsedObj = parsed as Record<string, unknown> | null;
+      if (parsedObj && parsedObj.ideas && Array.isArray(parsedObj.ideas)) {
         // Ensure all required fields exist
-        const validIdeas = parsed.ideas.map((idea: Partial<Idea>, idx: number) => ({
+        const validIdeas = (parsedObj.ideas as Partial<Idea>[]).map((idea: Partial<Idea>, idx: number) => ({
           id: idea.id || idx + 1,
           name: idea.name || `아이디어 ${idx + 1}`,
           category: idea.category || 'B2C',
@@ -515,17 +542,7 @@ export default function WorkflowPage() {
   }
 
   async function buildDocxBlob(plan: BusinessPlan): Promise<Blob> {
-    // ── 캐니언 컬러 팔레트 (웹 UI와 동일) ─────────────────────────
-    const DC = {
-      textDark:  '3D1008',  // 다크 브라운
-      accent:    'C24B25',  // 테라코타
-      amber:     'F5901E',  // 앰버
-      cream:     'FDE8D0',  // 크림
-      border:    'F0D5C0',  // 연크림 보더
-      textMid:   '8B5A40',  // 미드 브라운
-      textLight: 'B08060',  // 라이트 브라운
-      white:     'FFFFFF',
-    };
+    const DC = { ...CANYON_DOCX, white: 'FFFFFF' };
 
     const lines = plan.content.split('\n');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1162,20 +1179,7 @@ export default function WorkflowPage() {
     setPasteText('');
   }
 
-  // ── 캐니언 컬러 팔레트 ──────────────────────────────────────
-  const C = {
-    bg:        '#FDF5EE',
-    cardBg:    '#FFFAF5',
-    border:    '#F0D5C0',
-    textDark:  '#3D1008',
-    textMid:   '#8B5A40',
-    textLight: '#B08060',
-    accent:    '#C24B25',
-    amber:     '#F5901E',
-    amberLight:'#FFB347',
-    cream:     '#FDE8D0',
-    selectedBg:'#FEF3EB',
-  };
+  const C = CANYON;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
@@ -1212,7 +1216,7 @@ export default function WorkflowPage() {
             {availableProviders[selectedProvider] === null ? (
               <span style={{ color: C.textLight }}>확인 중...</span>
             ) : availableProviders[selectedProvider] ? (
-              <span className="flex items-center gap-1" style={{ color: '#6B7B3A' }}>
+              <span className="flex items-center gap-1" style={{ color: C.success }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                 {PROVIDER_CONFIGS[selectedProvider].label}
               </span>
@@ -1292,7 +1296,7 @@ export default function WorkflowPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-8 p-4 rounded-xl text-sm" style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+          <div className="mb-8 p-4 rounded-xl text-sm" style={{ backgroundColor: C.error, border: `1px solid ${C.errorBorder}`, color: C.errorText }}>
             {error}
           </div>
         )}
@@ -1716,7 +1720,7 @@ export default function WorkflowPage() {
 
             <div className="flex justify-between items-center gap-3 flex-wrap">
               <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>처음으로</button>
-              <button onClick={() => window.location.href = '/'} className="px-5 py-2.5 rounded-xl text-sm text-red-600 transition" style={{ border: '1px solid #FECACA', backgroundColor: '#FEF2F2' }}>진행 중단</button>
+              <button onClick={() => window.location.href = '/'} className="px-5 py-2.5 rounded-xl text-sm text-red-600 transition" style={{ border: `1px solid ${C.errorBorder}`, backgroundColor: C.error }}>진행 중단</button>
               <button
                 onClick={generateBusinessPlan}
                 disabled={selectedIdeas.length === 0}
@@ -1866,7 +1870,7 @@ export default function WorkflowPage() {
                 </button>
                 <div className="flex gap-2">
                   <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
+                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -2046,7 +2050,7 @@ export default function WorkflowPage() {
                 <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
                   <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
+                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex justify-center">
@@ -2098,7 +2102,7 @@ export default function WorkflowPage() {
                 {prdFormat === 'plain' && (
                   <button onClick={() => copyToClipboard(stripMarkdownForAI(prds[currentPRDIndex].content))}
                     className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-xl transition"
-                    style={{ border: `1px solid ${C.border}`, color: prdCopied ? '#3D6B3A' : C.textMid }}
+                    style={{ border: `1px solid ${C.border}`, color: prdCopied ? C.docxSave : C.textMid }}
                   >
                     {prdCopied
                       ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>복사됨</>
@@ -2143,7 +2147,7 @@ export default function WorkflowPage() {
                 <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
                   <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>.docx 저장</button>
+                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
             </div>
@@ -2179,7 +2183,7 @@ export default function WorkflowPage() {
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>취소</button>
-              <button onClick={executeSave} className="px-5 py-2 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: '#3D6B3A', color: '#fff' }}>저장</button>
+              <button onClick={executeSave} className="px-5 py-2 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>저장</button>
             </div>
           </div>
         </div>
