@@ -73,6 +73,7 @@
 - [x] "초안 보기" / "풀버전 보기" 화면 전환
 - [x] 마크다운 렌더링 (ReactMarkdown + remarkGfm)
 - [x] 아이디어 선택 → 사업기획서 복수 탭
+- [x] 색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합
 
 ---
 
