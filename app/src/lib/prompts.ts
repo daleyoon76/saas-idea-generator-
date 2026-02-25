@@ -203,13 +203,8 @@ function ideaBlock(idea: FullPlanIdea): string {
 }
 
 /** Agent 1 — 시장·문제 에이전트: 섹션 2, 3, 8 */
-export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: SearchResult[], existingPlanContent?: string): string {
-  return `한국어로만 답변하세요.
-${buildSearchCtx(searchResults)}
-${ideaBlock(idea)}
-${buildExistingPlanCtx(existingPlanContent)}
-
-당신은 시장·트렌드 분석 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
+export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
+  const defaultInstruction = `당신은 시장·트렌드 분석 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
 다른 섹션(1. 핵심요약, 4. 솔루션, 5. 경쟁분석 등)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
 
@@ -248,18 +243,18 @@ ${buildExistingPlanCtx(existingPlanContent)}
 - 수치·통계에는 [1], [2] 형태 각주 필수
 - 검색 자료 없으면 "~로 추정" 또는 "업계 추정치"로 명시
 - 가상 기업명·수치 생성 금지`;
-}
 
-/** Agent 2 — 경쟁·차별화 에이전트: 섹션 5, 6, 7 */
-export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
-
-## 이전 에이전트 분석 결과 (시장·문제·TAM)
-${marketContent}
 ${buildExistingPlanCtx(existingPlanContent)}
-당신은 경쟁 분석·포지셔닝 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
+
+${agentInstruction || defaultInstruction}`;
+}
+
+/** Agent 2 — 경쟁·차별화 에이전트: 섹션 5, 6, 7 */
+export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
+  const defaultInstruction = `당신은 경쟁 분석·포지셔닝 전문가입니다. 위 서비스에 대해 **아래 3개 섹션만** 작성하세요.
 다른 섹션(1. 핵심요약, 2. 트렌드, 3. 문제정의 등)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
 
@@ -291,20 +286,20 @@ ${buildExistingPlanCtx(existingPlanContent)}
 - Bullet point 중심, 항목별 명사형 마무리
 - 비교표, 차별화 도표 등 Markdown 표 형식 적극 활용
 - 가상 기업명 생성 금지`;
-}
 
-/** Agent 3 — 전략·솔루션 에이전트: 섹션 1, 4, 9, 10 */
-export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
 
-## 이전 에이전트 분석 결과 (시장·문제·경쟁·차별화)
+## 이전 에이전트 분석 결과 (시장·문제·TAM)
 ${marketContent}
-
-${competitionContent}
 ${buildExistingPlanCtx(existingPlanContent)}
-당신은 제품 전략·개발 로드맵 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
+${agentInstruction || defaultInstruction}`;
+}
+
+/** Agent 3 — 전략·솔루션 에이전트: 섹션 1, 4, 9, 10 */
+export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
+  const defaultInstruction = `당신은 제품 전략·개발 로드맵 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
 다른 섹션(2. 트렌드, 5. 경쟁분석 등)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
 
@@ -342,22 +337,22 @@ ${buildExistingPlanCtx(existingPlanContent)}
 - Bullet point 중심, 항목별 명사형 마무리
 - 로드맵은 단계별 구조로 명확하게
 - 구체적이고 실행 가능한 수준으로 작성`;
-}
 
-/** Agent 4 — 재무·리스크 에이전트: 섹션 11, 12, 13, 참고문헌 */
-export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, strategyContent: string, searchResults?: SearchResult[], existingPlanContent?: string): string {
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
 ${ideaBlock(idea)}
 
-## 이전 에이전트 분석 결과 (시장·경쟁·전략)
+## 이전 에이전트 분석 결과 (시장·문제·경쟁·차별화)
 ${marketContent}
 
 ${competitionContent}
-
-${strategyContent}
 ${buildExistingPlanCtx(existingPlanContent)}
-당신은 재무 모델링·리스크 분석 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
+${agentInstruction || defaultInstruction}`;
+}
+
+/** Agent 4 — 재무·리스크 에이전트: 섹션 11, 12, 13, 참고문헌 */
+export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: string, competitionContent: string, strategyContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
+  const defaultInstruction = `당신은 재무 모델링·리스크 분석 전문가입니다. 위 서비스에 대해 **아래 4개 섹션만** 작성하세요.
 다른 섹션(1~10)은 절대 포함하지 마세요.
 섹션 제목은 정확히 아래 형식을 유지하세요.
 
@@ -417,6 +412,19 @@ ${buildExistingPlanCtx(existingPlanContent)}
 - 수치·통계에는 [번호] 각주 필수
 - 출처 없는 수치는 "~로 추정" 또는 "업계 추정치"로 명시
 - 가상 기업명·수치 생성 금지`;
+
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+
+## 이전 에이전트 분석 결과 (시장·경쟁·전략)
+${marketContent}
+
+${competitionContent}
+
+${strategyContent}
+${buildExistingPlanCtx(existingPlanContent)}
+${agentInstruction || defaultInstruction}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

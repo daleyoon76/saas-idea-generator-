@@ -135,7 +135,7 @@ export default function Home() {
             <span className="text-white font-semibold text-base tracking-tight">SaaS Idea Generator</span>
           </div>
           <Link
-            href="/workflow"
+            href="/start"
             className="px-4 py-2 text-sm rounded-lg border transition backdrop-blur-sm"
             style={{
               background: `rgba(245, 144, 30, 0.15)`,
@@ -181,7 +181,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
-              href="/workflow"
+              href="/start"
               className="inline-flex items-center gap-2 px-8 py-4 font-semibold rounded-xl transition text-base shadow-2xl"
               style={{
                 background: `linear-gradient(135deg, ${CANYON.amber}, ${CANYON.amberLight})`,
@@ -280,7 +280,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>지금 바로 시작해보세요</h2>
           <p className="mb-8" style={{ color: CANYON.textMid }}>키워드 입력 하나로 아이디어에서 사업기획서까지</p>
           <Link
-            href="/workflow"
+            href="/start"
             className="inline-flex items-center gap-2 px-8 py-4 font-semibold rounded-xl transition"
             style={{
               background: `linear-gradient(135deg, ${CANYON.accent}, ${CANYON.amber})`,

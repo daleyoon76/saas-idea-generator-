@@ -65,6 +65,33 @@ export interface ProviderConfig {
   models: ModelOption[];
 }
 
+// --- Guided flow types ---
+
+export interface GuidedAnswers {
+  serviceName: string;
+  serviceOneLiner: string;
+  category: string;
+  targetCustomer: string;
+  problem: string;
+  features: string[];
+  differentiation: string;
+  revenueModel: string;
+  mvpDifficulty: string;
+}
+
+export type GuidedStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'generating' | 'complete';
+
+export interface GuidedResult {
+  idea: Idea;
+  businessPlan: BusinessPlan;
+  provider: AIProvider;
+  model: string;
+}
+
+export const GUIDED_RESULT_KEY = 'guided-result';
+
+// --- Provider configs ---
+
 export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
   ollama: {
     label: 'Ollama',

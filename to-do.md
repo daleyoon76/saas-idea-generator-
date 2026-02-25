@@ -75,6 +75,9 @@
 - [x] 아이디어 선택 → 사업기획서 복수 탭
 - [x] 색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합
 
+### 문서화
+- [x] Mintlify Docs 스킬 적용 — frontmatter 표준화(summary+read_when+title), docs.json 정비, markdownlint 설정
+
 ---
 
 ## 남은 작업

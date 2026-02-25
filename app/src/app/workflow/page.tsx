@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 // 단계별 기본 예상 소요 시간 (ms) — localStorage에 실측값이 쌓이면 자동으로 갱신됨
 const DEFAULT_STEP_MS = {
@@ -38,11 +39,13 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
-import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS } from '@/lib/types';
+import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
 
-export default function WorkflowPage() {
+function WorkflowPageInner() {
+  const searchParams = useSearchParams();
+  const routerNav = useRouter();
   const [step, setStep] = useState<WorkflowStep>('keyword');
   const [keyword, setKeyword] = useState('');
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -101,6 +104,29 @@ export default function WorkflowPage() {
     checkProviders();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
+  // 가이드 질문 결과 수신
+  useEffect(() => {
+    if (searchParams.get('from') === 'guided') {
+      const raw = sessionStorage.getItem(GUIDED_RESULT_KEY);
+      if (raw) {
+        try {
+          const result: GuidedResult = JSON.parse(raw);
+          setIdeas([result.idea]);
+          setSelectedIdeas([result.idea.id]);
+          setBusinessPlans([result.businessPlan]);
+          setCurrentPlanIndex(0);
+          setSelectedProvider(result.provider);
+          setSelectedModels(prev => ({ ...prev, [result.provider]: result.model }));
+          setStep('view-plan');
+          sessionStorage.removeItem(GUIDED_RESULT_KEY);
+        } catch (e) {
+          console.error('Failed to parse guided result:', e);
+        }
+      }
+      routerNav.replace('/workflow', { scroll: false });
+    }
+  }, [searchParams, routerNav]);
 
   function startTimer(initialEtaMs: number) {
     const now = Date.now();
@@ -2276,5 +2302,13 @@ export default function WorkflowPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function WorkflowPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: '#FDF5EE' }} />}>
+      <WorkflowPageInner />
+    </Suspense>
   );
 }

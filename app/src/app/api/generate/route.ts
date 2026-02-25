@@ -6,12 +6,17 @@ import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
+// YAML frontmatter(--- ... ---) 제거
+function stripFrontmatter(content: string): string {
+  return content.replace(/^---[\s\S]*?---\s*/, '');
+}
+
 // docs/bizplan-template.md 를 서버에서 읽어 사업기획서 프롬프트 생성
 function buildBusinessPlanPrompt(idea: Idea, searchResults: SearchResult[]): string {
   let template: string | undefined;
   try {
     const templatePath = path.join(process.cwd(), '..', 'docs', 'bizplan-template.md');
-    template = fs.readFileSync(templatePath, 'utf-8');
+    template = stripFrontmatter(fs.readFileSync(templatePath, 'utf-8'));
   } catch {
     console.warn('bizplan-template.md 읽기 실패, 기본 구조로 폴백');
   }
@@ -23,11 +28,59 @@ function buildPRDPrompt(idea: Idea, businessPlanContent: string): string {
   let template: string | undefined;
   try {
     const templatePath = path.join(process.cwd(), '..', 'docs', 'prd-template.md');
-    template = fs.readFileSync(templatePath, 'utf-8');
+    template = stripFrontmatter(fs.readFileSync(templatePath, 'utf-8'));
   } catch {
     console.warn('prd-template.md 읽기 실패, 기본 구조로 폴백');
   }
   return createPRDPrompt(idea, businessPlanContent, template);
+}
+
+// docs/agents_jd.md 에서 <!-- AGENT:xxx --> 블록을 추출하여 에이전트 지시문 반환
+function extractAgentInstruction(content: string, agentType: string): string | undefined {
+  const openTag = `<!-- AGENT:${agentType} -->`;
+  const closeTag = `<!-- /AGENT:${agentType} -->`;
+  const start = content.indexOf(openTag);
+  const end = content.indexOf(closeTag);
+  if (start === -1 || end === -1) return undefined;
+  return content.slice(start + openTag.length, end).trim();
+}
+
+// docs/agents_jd.md 를 한 번 읽어 4개 에이전트 지시문을 모두 추출
+function readAgentInstructions(): Record<string, string | undefined> {
+  try {
+    const filePath = path.join(process.cwd(), '..', 'docs', 'agents_jd.md');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return {
+      'full-plan-market': extractAgentInstruction(content, 'full-plan-market'),
+      'full-plan-competition': extractAgentInstruction(content, 'full-plan-competition'),
+      'full-plan-strategy': extractAgentInstruction(content, 'full-plan-strategy'),
+      'full-plan-finance': extractAgentInstruction(content, 'full-plan-finance'),
+    };
+  } catch {
+    console.warn('agents_jd.md 읽기 실패, 기본 미션으로 폴백');
+    return {};
+  }
+}
+
+// docs/agents_jd.md 를 서버에서 읽어 풀버전 에이전트 프롬프트 생성
+function buildFullPlanMarketPrompt(idea: Idea, searchResults: SearchResult[], existingPlanContent?: string): string {
+  const instructions = readAgentInstructions();
+  return createFullPlanMarketPrompt(idea, searchResults, existingPlanContent, instructions['full-plan-market']);
+}
+
+function buildFullPlanCompetitionPrompt(idea: Idea, marketContent: string, searchResults: SearchResult[], existingPlanContent?: string): string {
+  const instructions = readAgentInstructions();
+  return createFullPlanCompetitionPrompt(idea, marketContent, searchResults, existingPlanContent, instructions['full-plan-competition']);
+}
+
+function buildFullPlanStrategyPrompt(idea: Idea, marketContent: string, competitionContent: string, searchResults: SearchResult[], existingPlanContent?: string): string {
+  const instructions = readAgentInstructions();
+  return createFullPlanStrategyPrompt(idea, marketContent, competitionContent, searchResults, existingPlanContent, instructions['full-plan-strategy']);
+}
+
+function buildFullPlanFinancePrompt(idea: Idea, marketContent: string, competitionContent: string, strategyContent: string, searchResults: SearchResult[], existingPlanContent?: string): string {
+  const instructions = readAgentInstructions();
+  return createFullPlanFinancePrompt(idea, marketContent, competitionContent, strategyContent, searchResults, existingPlanContent, instructions['full-plan-finance']);
 }
 
 // app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
@@ -70,16 +123,16 @@ export async function POST(request: NextRequest) {
       prompt = createIdeaExtractionPrompt(planContent);
     } else if (type === 'full-plan-market' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
-      prompt = createFullPlanMarketPrompt(idea as Idea, (searchResults as SearchResult[]) || [], existingPlan);
+      prompt = buildFullPlanMarketPrompt(idea as Idea, (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-competition' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
-      prompt = createFullPlanCompetitionPrompt(idea as Idea, body.marketContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
+      prompt = buildFullPlanCompetitionPrompt(idea as Idea, body.marketContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-strategy' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
-      prompt = createFullPlanStrategyPrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
+      prompt = buildFullPlanStrategyPrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else if (type === 'full-plan-finance' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
-      prompt = createFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
+      prompt = buildFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
     } else {
       prompt = rawPrompt;
     }
@@ -152,31 +205,45 @@ async function generateWithOllama(model: string, prompt: string, jsonMode: boole
   return data.response;
 }
 
-async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192): Promise<string> {
+async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: 'You are an expert SaaS business plan writer and market analyst. Always fulfill the user\'s request completely in Korean. Never refuse or say you cannot help. Write the requested sections with concrete details, data, and analysis.',
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Claude API 오류: ${err.error?.message || response.statusText}`);
+    // Overloaded(529) 또는 Rate limit(429) → 대기 후 재시도
+    if ((response.status === 529 || response.status === 429) && attempt < retries) {
+      const retryAfterHeader = response.headers.get('retry-after');
+      const waitSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 15 * (attempt + 1);
+      console.log(`[Claude] ${response.status === 529 ? 'Overloaded' : 'Rate limit'} — ${waitSec}초 후 재시도 (${attempt + 1}/${retries})`);
+      await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
+      continue;
+    }
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(`Claude API 오류: ${err.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.content[0].text;
   }
 
-  const data = await response.json();
-  return data.content[0].text;
+  throw new Error('Claude API: 서버 과부하로 재시도 한도 초과. 잠시 후 다시 시도하거나 다른 모델을 선택해주세요.');
 }
 
 async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192, jsonMode: boolean = false): Promise<string> {
@@ -229,6 +296,16 @@ async function generateWithOpenAI(model: string, prompt: string, maxTokens: numb
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
+  // 모델별 최대 출력 토큰 상한
+  const MODEL_MAX_OUTPUT: Record<string, number> = {
+    'gpt-4o':      16384,
+    'gpt-4o-mini': 16384,
+    'gpt-4.1':     32768,
+    'gpt-4.1-mini': 32768,
+  };
+  const modelCap = MODEL_MAX_OUTPUT[model] ?? 16384;
+  const clampedTokens = Math.min(maxTokens, modelCap);
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -238,8 +315,11 @@ async function generateWithOpenAI(model: string, prompt: string, maxTokens: numb
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: 'You are an expert SaaS business plan writer and market analyst. Always fulfill the user\'s request completely in Korean. Never refuse or say you cannot help. Write the requested sections with concrete details, data, and analysis.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: clampedTokens,
       }),
     });
 
