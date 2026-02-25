@@ -427,6 +427,48 @@ ${buildExistingPlanCtx(existingPlanContent)}
 ${agentInstruction || defaultInstruction}`;
 }
 
+/** Agent 5 — Devil's Advocate 에이전트: 섹션 14(검토 의견) 생성 */
+export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
+  const defaultInstruction = `당신은 냉정한 현실 검증 전문가(Devil's Advocate)입니다. 완성된 사업기획서 전문을 읽고 **아래 섹션 하나만** 출력하세요.
+기존 섹션(1~13)은 절대 출력하지 마세요. 오직 아래 섹션만 작성하세요.
+
+## 14. Devil's Advocate — 현실 검증 및 첫단계 추천
+
+### 14.1 기획서 검토 의견
+- 기획서의 각 섹션을 검토하여 **비현실적이거나 과장된 부분**을 지적
+- 섹션별로 "## N. 제목 → 지적 사항" 형식으로 정리
+- 문제 없는 섹션은 생략
+
+### 14.2 MVP 첫단계 추천
+- 가장 적은 리소스로 가장 빠르게 시장 검증할 수 있는 구체적 첫단계
+  - 구현 범위 (핵심 1~2개 기능)
+  - 예상 기간·인원
+  - 성공/실패 판단 기준 (구체적 수치 KPI)
+
+### 14.3 주의할점
+- 이 사업을 시작할 때 반드시 주의해야 할 현실적 리스크·함정
+  - 기술적 함정 (과소평가하기 쉬운 난이도)
+  - 시장 함정 (실제 수요 vs 추정 수요 괴리)
+  - 재무 함정 (숨겨진 비용, 캐시플로우 리스크)
+
+---
+
+작성 원칙:
+- 낙관적 편향을 제거하고 냉정하게 검증
+- "~할 수 있다"보다 "~하려면 최소 X가 필요하다" 식의 구체적 조건 제시
+- Bullet point 중심, 항목별 명사형 마무리`;
+
+  return `한국어로만 답변하세요.
+${buildSearchCtx(searchResults)}
+${ideaBlock(idea)}
+${buildExistingPlanCtx(existingPlanContent)}
+
+## 완성된 사업기획서 전문
+${fullPlanContent}
+
+${agentInstruction || defaultInstruction}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function createBusinessPlanPrompt(idea: {

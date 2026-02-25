@@ -886,7 +886,7 @@ function WorkflowPageInner() {
     const agentEtaMs = 90000;
 
     // Agent 1: 시장·문제
-    setLoadingMessage(`[에이전트 1/4] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
+    setLoadingMessage(`[에이전트 1/5] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
     const r1 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -895,10 +895,10 @@ function WorkflowPageInner() {
     if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
     const marketContent = (await r1.json()).response as string;
     onAgentComplete(1, `"${idea.name}" 시장·트렌드·TAM 분석 완료`);
-    updateEta(3 * agentEtaMs);
+    updateEta(4 * agentEtaMs);
 
     // Agent 2: 경쟁·차별화
-    setLoadingMessage(`[에이전트 2/4] "${idea.name}" 경쟁·차별화 분석 중...`);
+    setLoadingMessage(`[에이전트 2/5] "${idea.name}" 경쟁·차별화 분석 중...`);
     const r2 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -907,10 +907,10 @@ function WorkflowPageInner() {
     if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
     const competitionContent = (await r2.json()).response as string;
     onAgentComplete(2, `"${idea.name}" 경쟁·차별화 분석 완료`);
-    updateEta(2 * agentEtaMs);
+    updateEta(3 * agentEtaMs);
 
     // Agent 3: 전략·솔루션
-    setLoadingMessage(`[에이전트 3/4] "${idea.name}" 전략·로드맵 수립 중...`);
+    setLoadingMessage(`[에이전트 3/5] "${idea.name}" 전략·로드맵 수립 중...`);
     const r3 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -919,10 +919,10 @@ function WorkflowPageInner() {
     if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
     const strategyContent = (await r3.json()).response as string;
     onAgentComplete(3, `"${idea.name}" 전략·로드맵 수립 완료`);
-    updateEta(1 * agentEtaMs);
+    updateEta(2 * agentEtaMs);
 
     // Agent 4: 재무·리스크
-    setLoadingMessage(`[에이전트 4/4] "${idea.name}" 재무·리스크 분석 중...`);
+    setLoadingMessage(`[에이전트 4/5] "${idea.name}" 재무·리스크 분석 중...`);
     const r4 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -931,13 +931,41 @@ function WorkflowPageInner() {
     if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
     const financeContent = (await r4.json()).response as string;
     onAgentComplete(4, `"${idea.name}" 재무·리스크 분석 완료`);
+    updateEta(1 * agentEtaMs);
 
     // 섹션 순서대로 조합
     const combined = combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
+
+    // Agent 5: Devil's Advocate (실패 시 combined 그대로 사용)
+    let finalContent = combined;
+    setLoadingMessage(`[에이전트 5/5] "${idea.name}" Devil's Advocate 검토 중...`);
+    try {
+      // 프롬프트 크기 제한: combined가 너무 크면 앞부분만 전달
+      const cappedPlan = combined.length > 40000 ? combined.slice(0, 40000) + '\n\n...(이하 생략)' : combined;
+      const r5 = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+      });
+      if (!r5.ok) {
+        const errBody = await r5.json().catch(() => ({}));
+        console.warn(`[Agent 5] Devil's Advocate 실패 (${r5.status}):`, errBody?.error || r5.statusText);
+        onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 생략 (${r5.status})`);
+      } else {
+        const devilContent = (await r5.json()).response as string;
+        // 섹션 14를 기획서 끝에 추가
+        finalContent = combined.trimEnd() + '\n\n---\n\n' + devilContent;
+        onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 완료`);
+      }
+    } catch (e) {
+      console.warn('[Agent 5] Devil\'s Advocate 예외:', e);
+      onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 생략`);
+    }
+
     return {
       ideaId: idea.id,
       ideaName: idea.name,
-      content: combined,
+      content: finalContent,
       createdAt: new Date().toISOString(),
       version: 'full',
     };
@@ -954,16 +982,16 @@ function WorkflowPageInner() {
     setBatchCount(0);
     setStep('generating-full-plan');
     setProgressCurrent(0);
-    setProgressTotal(4);
+    setProgressTotal(5);
     setCompletedSteps([]);
 
     const agentEtaMs = 90000;
-    startTimer(4 * agentEtaMs);
+    startTimer(5 * agentEtaMs);
 
     try {
       const newFullPlan = await runFullPlanPipeline(idea, (agentNum, label) => {
         setProgressCurrent(agentNum);
-        setCompletedSteps(prev => [...prev, `[${agentNum}/4] ${label}`]);
+        setCompletedSteps(prev => [...prev, `[${agentNum}/5] ${label}`]);
       });
 
       const prevFiltered = fullBusinessPlans.filter(p => p.ideaId !== idea.id);
@@ -992,7 +1020,7 @@ function WorkflowPageInner() {
     setBatchCount(targets.length);
     setStep('generating-full-plan');
 
-    const totalAgents = targets.length * 4;
+    const totalAgents = targets.length * 5;
     setProgressTotal(totalAgents);
     setProgressCurrent(0);
     setCompletedSteps([]);
@@ -1021,7 +1049,7 @@ function WorkflowPageInner() {
         allNewPlans.push(newFullPlan);
       } catch (err) {
         // 개별 실패: 건너뛰고 다음으로 진행
-        globalProgress = (allNewPlans.length + failedNames.length + 1) * 4;
+        globalProgress = (allNewPlans.length + failedNames.length + 1) * 5;
         setProgressCurrent(globalProgress);
         failedNames.push(idea.name);
         setCompletedSteps(prev => [...prev, `"${idea.name}" 생성 실패 — ${err instanceof Error ? err.message : '알 수 없는 오류'}`]);

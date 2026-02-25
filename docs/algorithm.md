@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-23
+> 마지막 업데이트: 2026-02-25
 
 ---
 
@@ -46,7 +46,7 @@ title: "알고리즘"
 |---|---|---|
 | `app/src/assets/criteria.md` | 아이디어 발굴 기준 (R10) | 아이디어 생성 프롬프트에 자동 반영 |
 | `docs/bizplan-template.md` | 사업기획서 섹션 구조 | 초안 사업기획서 생성 프롬프트에 자동 반영 |
-| `docs/agents_jd.md` | 풀버전 에이전트 4종 지시문 | 풀버전 기획서 생성 프롬프트에 자동 반영 (`<!-- AGENT:xxx -->` 블록 파싱) |
+| `docs/agents_jd.md` | 풀버전 에이전트 5종 지시문 | 풀버전 기획서 생성 프롬프트에 자동 반영 (`<!-- AGENT:xxx -->` 블록 파싱) |
 
 ---
 
@@ -63,6 +63,7 @@ title: "알고리즘"
 | `full-plan-competition` | `createFullPlanCompetitionPrompt()` 직접 호출 | `idea`, `marketContent`, `searchResults`, `existingPlanContent?` |
 | `full-plan-strategy` | `createFullPlanStrategyPrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `searchResults`, `existingPlanContent?` |
 | `full-plan-finance` | `createFullPlanFinancePrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `strategyContent`, `searchResults`, `existingPlanContent?` |
+| `full-plan-devil` | `createFullPlanDevilPrompt()` 직접 호출 | `idea`, `fullPlanContent`, `searchResults`, `existingPlanContent?` |
 | `extract-idea` | `createIdeaExtractionPrompt()` 직접 호출 | `planContent` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
@@ -373,7 +374,7 @@ LLM 호출 (maxTokens: 16000)
 
 ## 단계 3: 풀버전 사업기획서 생성 (에이전트 팀)
 
-초안과 독립적으로 실행되는 별도 생성 단계. 4개 에이전트가 순차적으로 담당 섹션을 작성하며, 각 에이전트는 이전 에이전트의 출력을 컨텍스트로 받는다.
+초안과 독립적으로 실행되는 별도 생성 단계. 5개 에이전트가 순차적으로 담당 섹션을 작성하며, 각 에이전트는 이전 에이전트의 출력을 컨텍스트로 받는다.
 
 ### 3-1. 검색 (초안과 동일한 5개 쿼리)
 
@@ -406,6 +407,15 @@ Agent 4 (full-plan-finance)
     ↓
 combineFullPlanSections()
   섹션 순서: 1→2→3→4→5→6→7→8→9→10→11→12→13→참고문헌
+  → combined
+    ↓
+Agent 5 (full-plan-devil)
+  입력: idea + combined(전체 기획서) + searchResults
+  출력: 수정이 필요한 섹션(기존 형식) + 섹션 14(첫단계 추천)
+  → devilContent
+    ↓
+applyDevilRevisions()
+  수정 섹션 교체 + 섹션 14 삽입
   → 최종 문서
 ```
 
@@ -423,7 +433,7 @@ const pattern = new RegExp(`\n##\s+\**${sectionNum}[.．](?![0-9])`)
 ### 3-4. UX 플로우
 
 - `view-plan`에서 "풀버전 사업기획서 생성하기 (에이전트 팀)" 버튼 클릭
-- `generating-full-plan` 화면: 4단계 진행률 + 에이전트별 완료 체크
+- `generating-full-plan` 화면: 5단계 진행률 + 에이전트별 완료 체크
 - `view-full-plan` 화면:
   - "Full Version" 뱃지
   - 탭: 생성된 풀버전 + 미생성 초안(점선 탭, 클릭 시 해당 초안 풀버전 생성)
@@ -495,7 +505,7 @@ LLM 호출 (maxTokens: 16000)
 | `app/src/app/api/trends/route.ts` | Google Trends 급등 신호 수집 (google-trends-api) |
 | `app/src/app/api/producthunt/route.ts` | Product Hunt 트렌딩 제품 수집 (GraphQL API v2) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
-| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (아이디어·초안·PRD·풀버전 에이전트 4종) |
+| `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (아이디어·초안·PRD·풀버전 에이전트 5종) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |
 | `app/src/assets/criteria.md` | 아이디어 발굴 기준 — **단일 소스** (R10, 수정 시 자동 반영) |
 | `docs/bizplan-template.md` | 사업기획서 섹션 구조 — **단일 소스** (수정 시 자동 반영) |

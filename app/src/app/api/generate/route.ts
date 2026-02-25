@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, SearchResult } from '@/lib/prompts';
+import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, createFullPlanDevilPrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
@@ -55,6 +55,7 @@ function readAgentInstructions(): Record<string, string | undefined> {
       'full-plan-competition': extractAgentInstruction(content, 'full-plan-competition'),
       'full-plan-strategy': extractAgentInstruction(content, 'full-plan-strategy'),
       'full-plan-finance': extractAgentInstruction(content, 'full-plan-finance'),
+      'full-plan-devil': extractAgentInstruction(content, 'full-plan-devil'),
     };
   } catch {
     console.warn('agents_jd.md 읽기 실패, 기본 미션으로 폴백');
@@ -81,6 +82,11 @@ function buildFullPlanStrategyPrompt(idea: Idea, marketContent: string, competit
 function buildFullPlanFinancePrompt(idea: Idea, marketContent: string, competitionContent: string, strategyContent: string, searchResults: SearchResult[], existingPlanContent?: string): string {
   const instructions = readAgentInstructions();
   return createFullPlanFinancePrompt(idea, marketContent, competitionContent, strategyContent, searchResults, existingPlanContent, instructions['full-plan-finance']);
+}
+
+function buildFullPlanDevilPrompt(idea: Idea, fullPlanContent: string, searchResults: SearchResult[], existingPlanContent?: string): string {
+  const instructions = readAgentInstructions();
+  return createFullPlanDevilPrompt(idea, fullPlanContent, searchResults, existingPlanContent, instructions['full-plan-devil']);
 }
 
 // app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
@@ -133,6 +139,10 @@ export async function POST(request: NextRequest) {
     } else if (type === 'full-plan-finance' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
       prompt = buildFullPlanFinancePrompt(idea as Idea, body.marketContent as string || '', body.competitionContent as string || '', body.strategyContent as string || '', (searchResults as SearchResult[]) || [], existingPlan);
+    } else if (type === 'full-plan-devil' && idea) {
+      const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;
+      const fullPlanContent = typeof body.fullPlanContent === 'string' ? body.fullPlanContent.slice(0, 40000) : '';
+      prompt = buildFullPlanDevilPrompt(idea as Idea, fullPlanContent, (searchResults as SearchResult[]) || [], existingPlan);
     } else {
       prompt = rawPrompt;
     }
@@ -152,6 +162,7 @@ export async function POST(request: NextRequest) {
       'full-plan-competition': 18000,
       'full-plan-strategy':    18000,
       'full-plan-finance':     18000,
+      'full-plan-devil':       18000,
       'generate-prd':          15000,
       'extract-idea':          4000,
     };
