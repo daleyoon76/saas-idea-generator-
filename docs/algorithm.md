@@ -1,6 +1,10 @@
 ---
+summary: "아이디어 생성 및 사업기획서 생성의 단계별 데이터 흐름과 프롬프트 구조"
+read_when:
+  - You want to understand the idea generation algorithm step by step
+  - You need to modify the prompt structure or data flow
+  - You are debugging the business plan generation pipeline
 title: "알고리즘"
-description: "아이디어 생성 및 사업기획서 생성의 단계별 데이터 흐름과 프롬프트 구조"
 ---
 
 # 알고리즘 문서
@@ -80,6 +84,7 @@ Tavily 검색(1-1)과 LLM 생성(1-2) 전에 **외부 트렌드 DB**에서 신�
 **공식 소개**: "Discover trends before they take off. See new market opportunities, trending topics, emerging technology, and hot startups."
 
 **공식 공개 데이터 소스** (explodingtopics.com 및 관련 페이지 확인):
+
 - Google, Reddit, Amazon, 소셜미디어, 포럼, 뉴스 등 수십 개 플랫폼의 소비자 신호 분석
 - DB 규모: 1.1M+ 트렌드, 매일 업데이트
 
@@ -108,6 +113,7 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 > ⚠️ API는 Business 플랜($249/월) 전용, 엔드포인트 비공개 → **현재 미구현**
 
 **SaaS 기획 활용 포인트**:
+
 - 주류화되기 전 급성장 키워드를 사전 발굴하는 용도
 - Technology 카테고리 필터링으로 SaaS 관련 니치 신호 추출 가능
 
@@ -118,10 +124,12 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 **공식 소개**: 2020년 창간, 36,000명 이상 구독자의 Substack 뉴스레터. "$1K~$10K MRR 마이크로 SaaS 제품 구축"을 목표로 하는 기술자·마케터 대상.
 
 **공식 공개 아이디어 발굴 방식**:
+
 - 특정 테마(AI 도구, 엔터프라이즈 소프트웨어 대체재, 니치 자동화 등)를 중심으로 이슈별 아이디어 발굴
 - 구체적인 데이터 수집 방법론(Reddit 크롤링 여부 등)은 공식 페이지에 명시되지 않음
 
 **공식 공개 제공 내용**:
+
 - 주간 뉴스레터 (143호 이상 발행)
 - 2026년 2월 기준 "검색 가능한 아이디어 DB"와 "키워드 DB" 추가 런칭
 - 별도 플랫폼에서 코스(라이브 7개, 예정 19개) 제공
@@ -133,6 +141,7 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 **공식 소개**: "1,200+ Validated SaaS Ideas with Market Research"
 
 **공식 공개 제공 내용**:
+
 - 1,200개 이상 아이디어 DB (난이도·니치·수익 잠재력 필터)
 - 7,500개 이상 키워드 추적 (검색량·CPC·경쟁 점수, 일일 업데이트)
 - 120개 이상 심화 리포트 (TAM/SAM/SOM, 경쟁사 20~50개 매핑, 기술 스택 가이드)
@@ -262,7 +271,7 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 
 **프롬프트 구조** (`lib/prompts.ts` > `createIdeaGenerationPrompt`):
 
-~~~~
+```
 한국어로만 답변하세요.
 
 ## 아이디어 발굴 기준
@@ -282,7 +291,7 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 
 위 발굴 기준과 시장 환경을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를
 아래 JSON 형식으로 출력하세요.
-~~~~
+```
 
 **아이디어 발굴 기준 요약** (출처: `app/src/assets/criteria.md`, R10):
 

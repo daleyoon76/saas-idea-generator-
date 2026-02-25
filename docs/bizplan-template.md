@@ -1,6 +1,10 @@
 ---
+summary: "AI가 사업기획서를 작성할 때 사용하는 13개 섹션 구조"
+read_when:
+  - You want to understand the business plan template structure
+  - You need to modify or add sections to the generated business plan
+  - You are reviewing the output format of the plan generator
 title: "사업기획서 템플릿"
-description: "AI가 사업기획서를 작성할 때 사용하는 13개 섹션 구조"
 ---
 
 ## 1. 핵심 요약 (Executive Summary)
@@ -25,7 +29,6 @@ description: "AI가 사업기획서를 작성할 때 사용하는 13개 섹션 �
 - 만들고자 하는 서비스와 **관련된 기술 트렌드** 조사 정리 [2]
 - 기술 성숙도, 도입 사례, 대안 기술 등
 - 관련 수치를 표현할 수 있는 표나 그래프를 추가할 수 있으면 추가
-
 
 ---
 

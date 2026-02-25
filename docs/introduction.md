@@ -1,9 +1,13 @@
 ---
+summary: "AI가 SaaS 사업기획서를 자동 도출하는 Next.js 웹앱의 전체 흐름과 지원 AI 공급자 소개"
+read_when:
+  - You want to understand what the SaaS Idea Generator does
+  - You need an overview of the project workflow and supported AI providers
+  - You are getting started with the project for the first time
 title: "소개"
-description: "AI가 SaaS 사업기획서를 자동 도출하는 Next.js 웹앱"
 ---
 
-## SaaS Idea Generator
+# SaaS Idea Generator
 
 키워드를 입력하면 AI가 에이전틱 SaaS 아이디어 3개를 발굴하고, 선택한 아이디어에 대한 상세 사업기획서를 마크다운으로 자동 작성합니다.
 
@@ -31,7 +35,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-개발 서버가 http://localhost:4000 에서 실행됩니다.
+개발 서버가 <http://localhost:4000> 에서 실행됩니다.
 
 다음 문서를 참고하세요:
 

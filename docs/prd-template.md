@@ -1,6 +1,10 @@
 ---
+summary: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Document)를 생성할 때 사용하는 구조"
+read_when:
+  - You want to understand the PRD template structure
+  - You need to modify the PRD generation output format
+  - You are reviewing how business plans are converted to PRDs
 title: "PRD 템플릿"
-description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Document)를 생성할 때 사용하는 구조"
 ---
 
 # PRD: [서비스명]
@@ -25,9 +29,11 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 ## 2. 배경 및 목적
 
 ### 해결하려는 문제
+
 * [사업기획서의 "문제 정의" 섹션을 바탕으로, 사용자가 실제로 겪는 페인 포인트를 2~3개 bullet으로 작성]
 
 ### 제품 목표
+
 * [이 서비스가 위 문제를 어떻게 해결하는지, 사업기획서의 "솔루션" 섹션을 바탕으로 작성]
 * [정량적 기대 효과가 있다면 포함 (예: 업무 시간 XX% 단축)]
 
@@ -44,6 +50,7 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 ## 4. 핵심 요구사항
 
 ### 사용자 스토리 (User Stories)
+
 > 형식: [사용자 유형]은(는) [목적/이유]를 달성하기 위해, [특정 기능]을 할 수 있어야 한다.
 
 * [사업기획서의 핵심 기능 1번을 사용자 스토리 형식으로 변환]
@@ -52,6 +59,7 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 * [추가 필요 시 계속 작성]
 
 ### 기능적 요구사항 (Functional Requirements)
+
 > 시스템이 반드시 동작해야 하는 기능을 FR-번호 형식으로 명시
 
 * **FR-01:** [핵심 기능 1 — 구체적인 입력/처리/출력 서술]
@@ -61,6 +69,7 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 * **FR-05:** [데이터 저장/조회 관련 요구사항]
 
 ### 비기능적 요구사항 (Non-Functional Requirements)
+
 > 성능, 보안, 안정성 등 "어떻게 동작해야 하는가"에 대한 조건
 
 * **NFR-01 (성능):** [주요 API 응답 속도 기준 — 예: 300ms 이내]
@@ -76,16 +85,19 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 > 각 핵심 기능(FR)마다 최소 1개 작성
 
 **AC-01 (FR-01 기준):**
+
 * **Given:** [사용자가 어떤 상태에 있을 때]
 * **When:** [사용자가 어떤 행동을 하면]
 * **Then:** [시스템이 어떻게 반응해야 하는가 — 구체적인 UI/응답 포함]
 
 **AC-02 (FR-02 기준):**
+
 * **Given:** [상황]
 * **When:** [행동]
 * **Then:** [결과]
 
 **AC-03 (FR-03 기준):**
+
 * **Given:** [상황]
 * **When:** [행동]
 * **Then:** [결과]
@@ -107,12 +119,14 @@ description: "AI가 사업기획서를 바탕으로 PRD(Product Requirements Doc
 > 핵심 시나리오의 화면 흐름을 단계별로 서술
 
 **메인 플로우:**
+
 1. [진입점 — 예: 랜딩 페이지 접속]
 2. [다음 단계]
 3. [핵심 액션 발생 지점]
 4. [결과 화면]
 
 **엣지 케이스:**
+
 * [오류 발생 시 플로우]
 * [빈 상태(Empty State) 처리]
 

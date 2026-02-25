@@ -1,6 +1,10 @@
 ---
+summary: "개발 환경 설정, 코드 위치, 새 AI 공급자 추가 방법, 자주 발생하는 문제 해결"
+read_when:
+  - You want to set up the development environment
+  - You need to add a new AI provider to the system
+  - You are troubleshooting common development issues
 title: "개발 가이드"
-description: "환경 설정, 코드 위치, 공급자 추가, 자주 발생하는 문제 해결"
 ---
 
 # 개발 가이드
@@ -140,6 +144,7 @@ MISTRAL_API_KEY=...
 ### 아이디어 발굴 프롬프트 (`createIdeaGenerationPrompt`)
 
 AI에게 요청하는 JSON 스키마를 바꾸려면:
+
 1. 프롬프트 내 JSON 예시 구조 수정
 2. `lib/types.ts`의 `Idea` 인터페이스 수정
 3. `workflow/page.tsx`의 파싱 로직(validIdeas 매핑) 수정
@@ -151,6 +156,7 @@ AI에게 요청하는 JSON 스키마를 바꾸려면:
 기획서 섹션을 추가하려면 프롬프트 내 마크다운 헤딩(`## 9. ...`)을 추가한다. 섹션 구조 참고: `app/src/assets/template.md`.
 
 현재 기획서는 8개 섹션:
+
 ```
 1. 시장 트렌드
 2. 문제 정의
@@ -167,6 +173,7 @@ AI에게 요청하는 JSON 스키마를 바꾸려면:
 ### 검색 컨텍스트 개선
 
 현재 검색 쿼리는 하드코딩:
+
 - 아이디어 발굴: `"${keyword} SaaS 트렌드 시장 2024"` — `workflow/page.tsx:65`
 - 기획서 작성: `"${idea.name} ${idea.target} 시장 경쟁사 트렌드"` — `workflow/page.tsx:203`
 
@@ -266,6 +273,7 @@ GOOGLE_CLIENT_SECRET=...
 4. `/api/docs` — 사업기획서 Google Docs 파일 생성
 
 Google API 호출 시 `googleapis` 패키지 사용:
+
 ```bash
 npm install googleapis
 ```

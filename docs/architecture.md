@@ -1,6 +1,10 @@
 ---
+summary: "전체 시스템 구조, 워크플로우 상태머신, AI 공급자 추상화 레이어 설계"
+read_when:
+  - You want to understand the overall system architecture
+  - You need to know how the workflow state machine works
+  - You are investigating the AI provider abstraction layer
 title: "아키텍처"
-description: "전체 시스템 구조, 워크플로우 상태머신, AI 추상화 레이어"
 ---
 
 # 아키텍처 문서

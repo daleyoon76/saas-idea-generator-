@@ -1,6 +1,10 @@
 ---
+summary: "2026년 에이전틱 SaaS 초기 아이템 발굴을 위한 5대 기준 (R10)"
+read_when:
+  - You want to understand the criteria used for SaaS idea discovery
+  - You need to modify or extend the idea evaluation framework
+  - You are reviewing how AI agents score and filter ideas
 title: "아이디어 발굴 기준"
-description: "2026년 에이전틱 SaaS 초기 아이템 발굴을 위한 5대 기준 (R10)"
 ---
 
 # 2026년 에이전틱 SaaS 초기 아이템 발굴 기준
