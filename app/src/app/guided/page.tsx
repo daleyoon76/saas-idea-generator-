@@ -13,7 +13,7 @@ import { CANYON } from '@/lib/colors';
 const C = CANYON;
 
 // ── 상수 ────────────────────────────────────────────────────
-const CATEGORY_OPTIONS = ['B2B SaaS', 'B2C', '마켓플레이스', '에이전트·자동화', '생산성 도구', '기타'];
+const CATEGORY_OPTIONS = ['웹 SaaS', '모바일 앱', '플랫폼·마켓플레이스', 'API·개발자 도구', 'AI 에이전트', '기타'];
 const REVENUE_OPTIONS = ['월 구독 (SaaS)', '거래 수수료', '프리미엄', '광고', 'API 과금', '라이선스', '기타'];
 const DIFFICULTY_OPTIONS = [
   { value: '쉬움', label: '쉬움 (하)', desc: '기존 API·프레임워크 조합으로 빠르게 MVP 가능' },
