@@ -864,6 +864,26 @@ function WorkflowPageInner() {
     }
   }
 
+  // ── Devil's Advocate RISK_SUMMARY 헬퍼 ────────────────────────────────
+  function extractRiskSummary(devilContent: string): string | null {
+    const match = devilContent.match(/<!-- RISK_SUMMARY -->\s*([\s\S]*?)\s*<!-- \/RISK_SUMMARY -->/);
+    return match ? match[1].trim() : null;
+  }
+
+  function stripRiskSummary(devilContent: string): string {
+    return devilContent.replace(/<!-- RISK_SUMMARY -->[\s\S]*?<!-- \/RISK_SUMMARY -->\s*/, '').trim();
+  }
+
+  function injectRiskIntoExecSummary(combined: string, riskSummary: string): string {
+    // Section 2 시작 직전에 리스크 요약 삽입 (Section 1 끝)
+    const sec2Pattern = /\n(## \**2[.．])/;
+    const sec2Match = combined.match(sec2Pattern);
+    if (!sec2Match || sec2Match.index === undefined) return combined;
+    const insertPos = sec2Match.index;
+    const riskBlock = `\n\n### 주요 리스크 (Devil's Advocate)\n\n${riskSummary}\n`;
+    return combined.slice(0, insertPos) + riskBlock + combined.slice(insertPos);
+  }
+
   // ── 풀버전 생성 파이프라인 (검색 → Agent 1~4 → 조합) ──────────────────
   async function runFullPlanPipeline(
     idea: Idea,
@@ -952,8 +972,14 @@ function WorkflowPageInner() {
         onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 생략 (${r5.status})`);
       } else {
         const devilContent = (await r5.json()).response as string;
-        // 섹션 14를 기획서 끝에 추가
-        finalContent = combined.trimEnd() + '\n\n---\n\n' + devilContent;
+        // RISK_SUMMARY 블록 추출 → Section 1에 삽입, Section 14 추가
+        const riskSummary = extractRiskSummary(devilContent);
+        const section14 = stripRiskSummary(devilContent);
+        let mergedCombined = combined;
+        if (riskSummary) {
+          mergedCombined = injectRiskIntoExecSummary(combined, riskSummary);
+        }
+        finalContent = mergedCombined.trimEnd() + '\n\n---\n\n' + section14;
         onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 완료`);
       }
     } catch (e) {

@@ -429,8 +429,23 @@ ${agentInstruction || defaultInstruction}`;
 
 /** Agent 5 — Devil's Advocate 에이전트: 섹션 14(검토 의견) 생성 */
 export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
-  const defaultInstruction = `당신은 냉정한 현실 검증 전문가(Devil's Advocate)입니다. 완성된 사업기획서 전문을 읽고 **아래 섹션 하나만** 출력하세요.
-기존 섹션(1~13)은 절대 출력하지 마세요. 오직 아래 섹션만 작성하세요.
+  const defaultInstruction = `당신은 냉정한 현실 검증 전문가(Devil's Advocate)입니다. 완성된 사업기획서 전문을 읽고 아래 두 블록을 순서대로 출력하세요.
+기존 섹션(1~13)은 절대 출력하지 마세요.
+
+**출력 구조 (반드시 이 순서로):**
+
+### 블록 1: 핵심 리스크 요약 (HTML 주석 마커 필수)
+
+아래 형식 그대로 출력하세요. 마커를 빠뜨리지 마세요.
+
+<!-- RISK_SUMMARY -->
+- (이 기획서에서 가장 경계해야 할 핵심 리스크 1)
+- (핵심 리스크 2)
+- (핵심 리스크 3)
+- (필요 시 4~5개까지)
+<!-- /RISK_SUMMARY -->
+
+### 블록 2: 섹션 14 (기존과 동일)
 
 ## 14. Devil's Advocate — 현실 검증 및 첫단계 추천
 
@@ -456,7 +471,8 @@ export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: s
 작성 원칙:
 - 낙관적 편향을 제거하고 냉정하게 검증
 - "~할 수 있다"보다 "~하려면 최소 X가 필요하다" 식의 구체적 조건 제시
-- Bullet point 중심, 항목별 명사형 마무리`;
+- Bullet point 중심, 항목별 명사형 마무리
+- 핵심 리스크 요약(RISK_SUMMARY)은 3~5개 bullet, 각 1줄로 간결하게`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}

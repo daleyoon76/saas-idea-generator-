@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-25
+> 마지막 업데이트: 2026-02-27
 
 ---
 
@@ -411,12 +411,18 @@ combineFullPlanSections()
     ↓
 Agent 5 (full-plan-devil)
   입력: idea + combined(전체 기획서) + searchResults
-  출력: 수정이 필요한 섹션(기존 형식) + 섹션 14(첫단계 추천)
+  출력: <!-- RISK_SUMMARY --> 핵심 경고 3~5줄 + 섹션 14(현실 검증)
   → devilContent
     ↓
-applyDevilRevisions()
-  수정 섹션 교체 + 섹션 14 삽입
-  → 최종 문서
+extractRiskSummary(devilContent)
+  → riskSummary (마커 사이 bullet) 또는 null (폴백)
+stripRiskSummary(devilContent)
+  → section14 (마커 블록 제거 후 나머지)
+injectRiskIntoExecSummary(combined, riskSummary)
+  → Section 1 끝(Section 2 직전)에 "### 주요 리스크" 삽입
+  → 마커 없으면 삽입 생략(원본 유지)
+    ↓
+combined + section14 결합 → 최종 문서
 ```
 
 ### 3-3. 섹션 조합 (`combineFullPlanSections`)
