@@ -868,6 +868,7 @@ function WorkflowPageInner() {
   async function runFullPlanPipeline(
     idea: Idea,
     onAgentComplete: (agentNum: number, agentLabel: string) => void,
+    draftContent?: string,
   ): Promise<BusinessPlan> {
     // 시장 조사
     let planSearchResults: SearchResult[] = [];
@@ -888,7 +889,7 @@ function WorkflowPageInner() {
     const r1 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
     const marketContent = (await r1.json()).response as string;
@@ -900,7 +901,7 @@ function WorkflowPageInner() {
     const r2 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
     const competitionContent = (await r2.json()).response as string;
@@ -912,7 +913,7 @@ function WorkflowPageInner() {
     const r3 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
     const strategyContent = (await r3.json()).response as string;
@@ -924,7 +925,7 @@ function WorkflowPageInner() {
     const r4 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
     const financeContent = (await r4.json()).response as string;
@@ -943,7 +944,7 @@ function WorkflowPageInner() {
       const r5 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || undefined }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
       });
       if (!r5.ok) {
         const errBody = await r5.json().catch(() => ({}));
@@ -990,7 +991,7 @@ function WorkflowPageInner() {
       const newFullPlan = await runFullPlanPipeline(idea, (agentNum, label) => {
         setProgressCurrent(agentNum);
         setCompletedSteps(prev => [...prev, `[${agentNum}/5] ${label}`]);
-      });
+      }, currentPlan.content);
 
       const prevFiltered = fullBusinessPlans.filter(p => p.ideaId !== idea.id);
       const newPlans = [...prevFiltered, newFullPlan];
@@ -1042,7 +1043,7 @@ function WorkflowPageInner() {
           globalProgress++;
           setProgressCurrent(globalProgress);
           setCompletedSteps(prev => [...prev, `[${globalProgress}/${totalAgents}] ${label}`]);
-        });
+        }, draft.content);
 
         allNewPlans.push(newFullPlan);
       } catch (err) {
