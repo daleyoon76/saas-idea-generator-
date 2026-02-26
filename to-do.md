@@ -1,24 +1,5 @@
 # SaaS 사업기획안 도출 서비스 - To-Do 리스트
 
-## 바로 다음 할 일
-
-- [x] **전체 UI 개선**
-  - 메인 페이지 UI와 디자인을 참고할 수 있는 10개의 웹페이지를 찾아서 검토
-  - 선정 페이지의 global CSS 추출해서 이 서비스 페이지 디자인에 반영
-
-- [x] **기존 기획서 Import → 워크플로우 중간 진입 기능**
-  - 키워드 단계에서 탭 전환으로 "기존 기획서 가져오기" 진입
-  - 파일 업로드(.md/.txt/.docx) + 드래그앤드롭 + 텍스트 붙여넣기
-  - LLM으로 기획서에서 Idea 구조체 자동 추출 (`extract-idea` API)
-  - Import 후 view-plan 합류 → 기존 PRD 생성 / 풀버전 에이전트 팀 재사용
-  - 에이전트 팀 심화 모드: 기존 기획서를 컨텍스트로 전달하여 보강·검증
-  - .docx 파싱용 `/api/parse-docx` (mammoth 라이브러리)
-
-- [ ] **Phase 3: Google API 연동**
-  - Google OAuth 2.0 인증, Sheets/Docs 저장
-
----
-
 ## 완료된 작업
 
 ### 아이디어 생성
@@ -74,6 +55,14 @@
 - [x] 마크다운 렌더링 (ReactMarkdown + remarkGfm)
 - [x] 아이디어 선택 → 사업기획서 복수 탭
 - [x] 색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합
+
+### 사업기획서 생성 (추가)
+- [x] Agent 5: Devil's Advocate — 섹션 14(현실 검증 + MVP 추천 + 주의점) 생성
+- [x] 에이전트 JD 단일 소스 (`docs/agents_jd.md`) — 런타임 프롬프트 주입
+- [x] 가이드 질문 → 사업기획서 초안 경로 (`/start` → `/guided` 8단계 위자드)
+
+### 저장 기능 (추가)
+- [x] 네이티브 Save As 다이얼로그 (`showSaveFilePicker`) — 폴더+파일명 한번에 선택
 
 ### 문서화
 - [x] Mintlify Docs 스킬 적용 — frontmatter 표준화(summary+read_when+title), docs.json 정비, markdownlint 설정
