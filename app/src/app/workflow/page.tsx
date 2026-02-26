@@ -84,8 +84,6 @@ function WorkflowPageInner() {
   const processStartRef = useRef<number | null>(null);
   const expectedEndRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [dirName, setDirName] = useState('다운로드');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
@@ -761,17 +759,6 @@ function WorkflowPageInner() {
     setShowSaveDialog(true);
   }
 
-  async function handlePickFolder() {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handle: FileSystemDirectoryHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
-      setDirHandle(handle);
-      setDirName(handle.name);
-    } catch {
-      // 사용자가 취소한 경우 무시
-    }
-  }
-
   async function executeSave() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
@@ -794,18 +781,29 @@ function WorkflowPageInner() {
       fileName = `${baseName}.docx`;
     }
 
-    if (dirHandle) {
+    // showSaveFilePicker: 네이티브 "다른 이름으로 저장" 다이얼로그 (Chrome/Edge)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (window as any).showSaveFilePicker === 'function') {
       try {
-        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+        const mimeType = pendingFileFormat === 'md' ? 'text/markdown' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fileHandle = await (window as any).showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: pendingFileFormat === 'md' ? 'Markdown' : 'Word Document', accept: { [mimeType]: [ext] } }],
+        });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
-      } catch {
-        triggerBrowserDownload(blob, fileName);
+        return;
+      } catch (e: unknown) {
+        // 사용자가 취소한 경우 (AbortError) → 아무것도 안 함
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+        // 그 외 에러 → 브라우저 다운로드로 폴백
       }
-    } else {
-      triggerBrowserDownload(blob, fileName);
     }
+
+    triggerBrowserDownload(blob, fileName);
   }
 
   async function generatePRD(sourcePlan?: BusinessPlan, returnStep: WorkflowStep = 'view-plan') {
@@ -2303,7 +2301,7 @@ function WorkflowPageInner() {
             <h3 className="text-base font-semibold mb-5" style={{ color: C.textDark }}>
               {pendingFileFormat === 'md' ? '마크다운(.md)으로 저장' : '워드(.docx) 파일로 저장'}
             </h3>
-            <div className="mb-4">
+            <div className="mb-5">
               <div className="text-xs mb-1" style={{ color: C.textLight }}>파일명</div>
               <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
                 {(() => {
@@ -2311,15 +2309,6 @@ function WorkflowPageInner() {
                   const base = keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}` : `${prefix}_${pendingPlan.ideaName}`;
                   return `${base}.${pendingFileFormat}`;
                 })()}
-              </div>
-            </div>
-            <div className="mb-6">
-              <div className="text-xs mb-1" style={{ color: C.textLight }}>저장 위치</div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>{dirName}</div>
-                {'showDirectoryPicker' in window && (
-                  <button onClick={handlePickFolder} className="px-3 py-2 text-sm rounded-lg whitespace-nowrap transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>변경</button>
-                )}
               </div>
             </div>
             <div className="flex justify-end gap-3">
