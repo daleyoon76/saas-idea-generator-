@@ -130,11 +130,22 @@ export default function GuidedPage() {
   }
 
   // ── Idea 구성 ──────────────────────────────────────────
+  function generateServiceName(oneLiner: string): string {
+    const cleaned = oneLiner.trim();
+    // 핵심 키워드 추출: 조사/접속사 등 제거 후 앞 2~3단어 조합
+    const stopWords = ['이', '가', '을', '를', '의', '에', '로', '으로', '와', '과', '는', '은', '도', '만', '까지', '부터', '에서', '한', '된', '하는', '해주는', '위한', '통한', '있는'];
+    const words = cleaned.replace(/[,.\-()]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !stopWords.includes(w));
+    const keywords = words.slice(0, 3);
+    if (keywords.length === 0) return 'My Service';
+    return keywords.join(' ');
+  }
+
   function buildIdea(overrideAnswers?: GuidedAnswers): Idea {
     const a = overrideAnswers ?? (answers as GuidedAnswers);
+    const name = a.serviceName?.trim() || generateServiceName(a.serviceOneLiner);
     return {
       id: -2,
-      name: a.serviceName,
+      name,
       category: a.category,
       oneLiner: a.serviceOneLiner,
       target: a.targetCustomer,
@@ -225,7 +236,7 @@ export default function GuidedPage() {
   // ── 스텝 유효성 검사 ───────────────────────────────────
   function isStepValid(s: GuidedStep): boolean {
     switch (s) {
-      case 1: return !!(answers.serviceName?.trim() && answers.serviceOneLiner?.trim());
+      case 1: return !!(answers.serviceOneLiner?.trim());
       case 2: return !!answers.category;
       case 3: return !!(answers.targetCustomer?.trim());
       case 4: return !!(answers.problem?.trim() && answers.problem.trim().length >= 10);
@@ -450,7 +461,7 @@ export default function GuidedPage() {
                     <p className="text-sm mb-6" style={{ color: C.textMid }}>
                       서비스 이름과 한 줄로 설명해주세요.
                     </p>
-                    <label className="block text-xs font-medium mb-1.5" style={{ color: C.textLight }}>서비스명</label>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: C.textLight }}>서비스명 <span style={{ color: C.textLight, fontWeight: 400 }}>(선택 — 비워두면 자동 생성)</span></label>
                     <input
                       type="text"
                       value={answers.serviceName || ''}
