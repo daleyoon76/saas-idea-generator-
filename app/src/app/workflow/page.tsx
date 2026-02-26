@@ -58,7 +58,7 @@ function WorkflowPageInner() {
   const [currentPRDIndex, setCurrentPRDIndex] = useState(0);
   const [prdFormat, setPrdFormat] = useState<'markdown' | 'plain'>('markdown');
   const [prdCopied, setPrdCopied] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
   const [availableProviders, setAvailableProviders] = useState<Record<AIProvider, boolean | null>>({
@@ -74,7 +74,7 @@ function WorkflowPageInner() {
     openai: PROVIDER_CONFIGS.openai.defaultModel,
   });
   const [rawResponse, setRawResponse] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [, setSearchResults] = useState<SearchResult[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(2);
