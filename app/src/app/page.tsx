@@ -27,7 +27,7 @@ const features = [
       </svg>
     ),
     title: "다중 AI 모델 지원",
-    description: "Ollama(로컬 무료), Claude, Gemini, GPT-4o 중 원하는 모델로 자유롭게 선택. 모델별 가용 상태를 실시간으로 표시합니다.",
+    description: "Claude, Gemini, GPT-4o, Ollama(로컬 무료) 중 원하는 모델로 자유롭게 선택. 모델별 가용 상태를 실시간으로 표시합니다.",
   },
   {
     icon: (
@@ -159,7 +159,7 @@ export default function Home() {
             }}
           >
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CANYON.amberLight }} />
-            Ollama · Claude · Gemini · GPT-4o 지원
+            Claude · Gemini · GPT-4o · Ollama 지원
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold leading-[1.15] tracking-tight mb-6" style={{ color: CANYON.cream }}>
@@ -310,7 +310,7 @@ export default function Home() {
       <footer style={{ borderTop: `1px solid ${CANYON.border}` }} className="py-8">
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs" style={{ color: CANYON.textLight }}>
           <span>My CSO</span>
-          <span>Powered by Ollama · Claude · Gemini · GPT-4o</span>
+          <span>Powered by Claude · Gemini · GPT-4o · Ollama</span>
         </div>
       </footer>
     </div>

@@ -88,18 +88,18 @@ function WorkflowPageInner() {
   const [prdCopied, setPrdCopied] = useState(false);
   const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('claude');
   const [availableProviders, setAvailableProviders] = useState<Record<AIProvider, boolean | null>>({
-    ollama: null,
     claude: null,
     gemini: null,
     openai: null,
+    ollama: null,
   });
   const [selectedModels, setSelectedModels] = useState<Record<AIProvider, string>>({
-    ollama: PROVIDER_CONFIGS.ollama.defaultModel,
     claude: PROVIDER_CONFIGS.claude.defaultModel,
     gemini: PROVIDER_CONFIGS.gemini.defaultModel,
     openai: PROVIDER_CONFIGS.openai.defaultModel,
+    ollama: PROVIDER_CONFIGS.ollama.defaultModel,
   });
   const [rawResponse, setRawResponse] = useState('');
   const [, setSearchResults] = useState<SearchResult[]>([]);

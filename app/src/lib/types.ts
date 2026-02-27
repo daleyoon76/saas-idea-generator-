@@ -93,14 +93,6 @@ export const GUIDED_RESULT_KEY = 'guided-result';
 // --- Provider configs ---
 
 export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
-  ollama: {
-    label: 'Ollama',
-    description: '로컬 실행 (무료)',
-    defaultModel: 'gemma2:9b',
-    models: [
-      { id: 'gemma2:9b', label: 'gemma2:9b', description: '기본', quality: 3, speed: 2, cost: 5 },
-    ],
-  },
   claude: {
     label: 'Claude',
     description: 'Anthropic',
@@ -129,6 +121,14 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
       { id: 'gpt-4o-mini', label: 'GPT-4o mini', description: '빠름·저렴',   quality: 3, speed: 5, cost: 5 },
       { id: 'gpt-4o',      label: 'GPT-4o',      description: '균형 (추천)', quality: 4, speed: 4, cost: 3 },
       { id: 'gpt-4.1',     label: 'GPT-4.1',     description: '최신',        quality: 5, speed: 4, cost: 2 },
+    ],
+  },
+  ollama: {
+    label: 'Ollama',
+    description: '로컬 실행 (무료)',
+    defaultModel: 'gemma2:9b',
+    models: [
+      { id: 'gemma2:9b', label: 'gemma2:9b', description: '기본', quality: 3, speed: 2, cost: 5 },
     ],
   },
 };
