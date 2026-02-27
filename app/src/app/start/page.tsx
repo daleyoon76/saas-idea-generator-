@@ -92,7 +92,7 @@ export default function StartPage() {
                   className="mt-5 inline-flex items-center text-sm font-semibold gap-1"
                   style={{ color: C.accent }}
                 >
-                  아이디어 발굴 시작 <span className="transition-transform group-hover:translate-x-1">→</span>
+                  AI 아이디어 발굴 <span className="transition-transform group-hover:translate-x-1">→</span>
                 </div>
               </div>
             </Link>
