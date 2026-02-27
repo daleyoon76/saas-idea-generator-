@@ -46,6 +46,8 @@ import { CANYON, CANYON_DOCX } from '@/lib/colors';
 /** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
 function sanitizeMermaidSyntax(src: string): string {
   let result = src
+    // BOM 제거
+    .replace(/^\uFEFF/, '')
     // box-drawing lines (─ ━ ═) + em/en dashes → standard --
     .replace(/[─━═\u2500\u2501\u2550—–\u2014\u2013]{1,4}>/g, '-->')
     // Unicode arrows → -->
@@ -56,7 +58,11 @@ function sanitizeMermaidSyntax(src: string): string {
     .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
     .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
     // diagram type 선언 뒤 불필요한 세미콜론 제거 (flowchart TD; → flowchart TD)
-    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|quadrantChart|xychart-beta)\b[^;\n]*);/gm, '$1');
+    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|quadrantChart|xychart-beta)\b[^;\n]*);/gm, '$1')
+    // 잘린 데이터 행 제거 (쉼표 뒤에 닫는 괄호 없이 끝나는 줄)
+    .replace(/^.*\[[\d\s.,eE+-]*,\s*$/gm, '')
+    // trailing 빈 줄 정리
+    .replace(/\n{3,}/g, '\n\n');
 
   // quadrantChart 보정
   if (/^\s*quadrantChart/m.test(result)) {
@@ -115,6 +121,57 @@ function sanitizeMermaidSyntax(src: string): string {
     }
   }
 
+  // xychart-beta 보정
+  if (/^\s*xychart-beta/m.test(result)) {
+    const lines = result.split('\n');
+    const fixed: string[] = [];
+    let xLen = 0; // x-axis 배열 항목 수
+
+    for (const line of lines) {
+      let l = line;
+
+      // x-axis 배열 항목에 따옴표 추가: [1월, 2월] → ["1월", "2월"]
+      const xMatch = l.match(/^(\s*x-axis\s+)\[(.+)\]\s*$/);
+      if (xMatch) {
+        const items = xMatch[2].split(',').map(s => {
+          const t = s.trim().replace(/^"|"$/g, '');
+          return `"${t}"`;
+        });
+        xLen = items.length;
+        l = `${xMatch[1]}[${items.join(', ')}]`;
+      }
+
+      // y-axis: "label" min --> max 형식에서 따옴표 보정
+      const yRangeMatch = l.match(/^(\s*y-axis\s+)(?!")([^"[\n]+?)(\s+\d)/);
+      if (yRangeMatch) {
+        l = `${yRangeMatch[1]}"${yRangeMatch[2].trim()}"${yRangeMatch[3]}`;
+      }
+
+      // bar / line 데이터 배열: 닫는 ] 없는 잘린 행 제거
+      const dataLineMatch = l.match(/^(\s*(?:bar|line)\s+)\[(.+)$/);
+      if (dataLineMatch && !l.includes(']')) {
+        continue; // 잘린 데이터 행 스킵
+      }
+
+      // bar / line 데이터 배열: x-axis 길이와 맞추기 (잘린 데이터 패딩)
+      if (xLen > 0) {
+        const barMatch = l.match(/^(\s*(?:bar|line)\s+)\[(.+)\]\s*$/);
+        if (barMatch) {
+          const nums = barMatch[2].split(',').map(s => s.trim()).filter(Boolean);
+          if (nums.length < xLen) {
+            while (nums.length < xLen) nums.push('0');
+            l = `${barMatch[1]}[${nums.join(', ')}]`;
+          } else if (nums.length > xLen) {
+            l = `${barMatch[1]}[${nums.slice(0, xLen).join(', ')}]`;
+          }
+        }
+      }
+
+      fixed.push(l);
+    }
+    result = fixed.join('\n');
+  }
+
   return result;
 }
 
@@ -158,8 +215,8 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
     svgEl.setAttribute('height', String(h));
     const fixedSvg = new XMLSerializer().serializeToString(svgEl);
 
-    const blob = new Blob([fixedSvg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    // data URL 사용 — blob URL은 cross-origin으로 취급돼 canvas tainted 에러 발생
+    const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fixedSvg)))}`;
 
     return new Promise((resolve) => {
       const img = new Image();
@@ -173,14 +230,13 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.scale(scale, scale);
         ctx.drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url);
         canvas.toBlob((pngBlob) => {
           if (!pngBlob) { resolve(null); return; }
           pngBlob.arrayBuffer().then(buf => resolve({ data: new Uint8Array(buf), width: w, height: h }));
         }, 'image/png');
       };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-      img.src = url;
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
     });
   } catch {
     return null;
@@ -227,10 +283,8 @@ function MermaidDiagram({ chart }: { chart: string }) {
     setFit(svgWidth <= containerWidth);
   }, [svg]);
 
-  if (error) {
-    return <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5"
-      style={{ backgroundColor: '#F5EDE6', color: '#3D1008', fontFamily: 'var(--font-mono), monospace' }}>{sanitized}</pre>;
-  }
+  // 근본적 대책: 렌더링 실패 시 다이어그램을 조용히 숨김 (raw 코드 노출 방지)
+  if (error) return null;
   return <div className={`my-4 overflow-x-auto mermaid-wrap${fit ? ' fit' : ''}`}
     style={{ width: '100%' }}
     ref={mermaidRef}
