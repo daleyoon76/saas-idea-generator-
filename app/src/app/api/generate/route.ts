@@ -220,21 +220,45 @@ async function generateWithClaude(model: string, prompt: string, maxTokens: numb
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
+  // Opus 등 느린 모델은 응답에 수 분 소요 → 10분 타임아웃
+  const timeoutMs = 600000;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        system: 'You are an expert SaaS business plan writer and market analyst. Always fulfill the user\'s request completely in Korean. Never refuse or say you cannot help. Write the requested sections with concrete details, data, and analysis.',
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          system: 'You are an expert SaaS business plan writer and market analyst. Always fulfill the user\'s request completely in Korean. Never refuse or say you cannot help. Write the requested sections with concrete details, data, and analysis.',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      if (controller.signal.aborted) {
+        throw new Error(`Claude API 응답 시간 초과 (${Math.round(timeoutMs / 60000)}분). 모델을 변경하거나 다시 시도해주세요.`);
+      }
+      // 네트워크 오류 시 재시도
+      if (attempt < retries) {
+        console.log(`[Claude] fetch 실패 — 15초 후 재시도 (${attempt + 1}/${retries}):`, fetchErr);
+        await new Promise(resolve => setTimeout(resolve, 15000));
+        continue;
+      }
+      throw new Error(`Claude API 연결 실패: ${fetchErr instanceof Error ? fetchErr.message : 'fetch failed'}`);
+    } finally {
+      clearTimeout(timer);
+    }
 
     // Overloaded(529) 또는 Rate limit(429) → 대기 후 재시도
     if ((response.status === 529 || response.status === 429) && attempt < retries) {

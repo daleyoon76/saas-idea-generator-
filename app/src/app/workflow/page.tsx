@@ -444,7 +444,7 @@ function WorkflowPageInner() {
       }
       setStep('select-ideas');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      { console.error('[오류]', err); setError(err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err) || '알 수 없는 오류'); }
       setStep('keyword');
     } finally {
       setIsLoading(false);
@@ -542,7 +542,7 @@ function WorkflowPageInner() {
       }
       setStep('view-plan');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      { console.error('[오류]', err); setError(err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err) || '알 수 없는 오류'); }
       setStep('select-ideas');
     } finally {
       setIsLoading(false);
@@ -917,7 +917,7 @@ function WorkflowPageInner() {
       setCompletedSteps([`"${idea.name}" PRD 작성 완료`]);
       setStep('view-prd');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      { console.error('[오류]', err); setError(err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err) || '알 수 없는 오류'); }
       setStep(returnStep);
     } finally {
       setIsLoading(false);
@@ -949,17 +949,17 @@ function WorkflowPageInner() {
   // ── 풀버전 생성 파이프라인 (검색 → Agent 1~4 → 조합) ──────────────────
 
   // 타임아웃 래퍼: 에이전트 호출이 5분 넘으면 중단
-  async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 300000): Promise<Response> {
+  async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 600000): Promise<Response> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(`요청 시간 초과 (${Math.round(timeoutMs / 1000)}초)`), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...opts, signal: controller.signal });
       return res;
     } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`AI 응답 시간 초과 (${Math.round(timeoutMs / 1000)}초). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
+      if (controller.signal.aborted) {
+        throw new Error(`AI 응답 시간 초과 (${Math.round(timeoutMs / 60000)}분). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
       }
-      throw err;
+      throw err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'fetch 실패');
     } finally {
       clearTimeout(timer);
     }
@@ -970,8 +970,8 @@ function WorkflowPageInner() {
     onAgentComplete: (agentNum: number, agentLabel: string) => void,
     draftContent?: string,
   ): Promise<BusinessPlan> {
-    // 기존 기획서 컨텍스트: 클라이언트에서 15,000자로 캡 (프롬프트에서 8K로 재절삭됨)
-    const existingCtx = (importedPlanContent || draftContent || '').slice(0, 15000) || undefined;
+    // 기존 기획서 컨텍스트: 프롬프트에서 8K로 재절삭되므로 클라이언트에서도 8K로 캡
+    const existingCtx = (importedPlanContent || draftContent || '').slice(0, 8000) || undefined;
 
     // 시장 조사
     let planSearchResults: SearchResult[] = [];
@@ -988,52 +988,41 @@ function WorkflowPageInner() {
     const agentEtaMs = 90000;
     const headers = { 'Content-Type': 'application/json' };
     // 이전 에이전트 출력 캡 (request body 과대 방지, 서버 프롬프트에서 재절삭됨)
-    const cap = (s: string, max = 25000) => s.length > max ? s.slice(0, max) : s;
+    const cap = (s: string, max = 12000) => s.length > max ? s.slice(0, max) : s;
     // 검색결과도 캡 (snippet만 추려서 크기 줄임)
-    const cappedSearch = planSearchResults.slice(0, 8);
+    const cappedSearch = planSearchResults.slice(0, 5).map(r => ({ title: r.title, url: r.url, snippet: (r.snippet || '').slice(0, 300) }));
+
+    // 안전한 fetch: body 크기 로깅 + 에이전트별 에러 메시지
+    async function agentFetch(agentNum: number, agentLabel: string, payload: Record<string, unknown>): Promise<string> {
+      const bodyStr = JSON.stringify(payload);
+      console.log(`[에이전트 ${agentNum}] request body: ${Math.round(bodyStr.length / 1024)}KB`);
+      const r = await fetchWithTimeout('/api/generate', { method: 'POST', headers, body: bodyStr });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(`[에이전트 ${agentNum}] ${agentLabel} 실패: ${e?.error || r.statusText}`); }
+      const content = (await r.json()).response as string;
+      onAgentComplete(agentNum, `"${idea.name}" ${agentLabel} 완료`);
+      return content;
+    }
+
+    const base = { provider: selectedProvider, model: selectedModels[selectedProvider] };
 
     // Agent 1: 시장·문제
     setLoadingMessage(`[에이전트 1/5] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
-    const r1 = await fetchWithTimeout('/api/generate', {
-      method: 'POST', headers,
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: cappedSearch, existingPlanContent: existingCtx }),
-    });
-    if (!r1.ok) { const e = await r1.json().catch(() => ({})); throw new Error(`[에이전트 1] 시장 분석 실패: ${e?.error || r1.statusText}`); }
-    const marketContent = (await r1.json()).response as string;
-    onAgentComplete(1, `"${idea.name}" 시장·트렌드·TAM 분석 완료`);
+    const marketContent = await agentFetch(1, '시장·트렌드·TAM 분석', { ...base, type: 'full-plan-market', idea, searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(4 * agentEtaMs);
 
     // Agent 2: 경쟁·차별화
     setLoadingMessage(`[에이전트 2/5] "${idea.name}" 경쟁·차별화 분석 중...`);
-    const r2 = await fetchWithTimeout('/api/generate', {
-      method: 'POST', headers,
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent: cap(marketContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
-    });
-    if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new Error(`[에이전트 2] 경쟁 분석 실패: ${e?.error || r2.statusText}`); }
-    const competitionContent = (await r2.json()).response as string;
-    onAgentComplete(2, `"${idea.name}" 경쟁·차별화 분석 완료`);
+    const competitionContent = await agentFetch(2, '경쟁·차별화 분석', { ...base, type: 'full-plan-competition', idea, marketContent: cap(marketContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(3 * agentEtaMs);
 
     // Agent 3: 전략·솔루션
     setLoadingMessage(`[에이전트 3/5] "${idea.name}" 전략·로드맵 수립 중...`);
-    const r3 = await fetchWithTimeout('/api/generate', {
-      method: 'POST', headers,
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
-    });
-    if (!r3.ok) { const e = await r3.json().catch(() => ({})); throw new Error(`[에이전트 3] 전략 수립 실패: ${e?.error || r3.statusText}`); }
-    const strategyContent = (await r3.json()).response as string;
-    onAgentComplete(3, `"${idea.name}" 전략·로드맵 수립 완료`);
+    const strategyContent = await agentFetch(3, '전략·로드맵 수립', { ...base, type: 'full-plan-strategy', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(2 * agentEtaMs);
 
     // Agent 4: 재무·리스크
     setLoadingMessage(`[에이전트 4/5] "${idea.name}" 재무·리스크 분석 중...`);
-    const r4 = await fetchWithTimeout('/api/generate', {
-      method: 'POST', headers,
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), strategyContent: cap(strategyContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
-    });
-    if (!r4.ok) { const e = await r4.json().catch(() => ({})); throw new Error(`[에이전트 4] 재무 분석 실패: ${e?.error || r4.statusText}`); }
-    const financeContent = (await r4.json()).response as string;
-    onAgentComplete(4, `"${idea.name}" 재무·리스크 분석 완료`);
+    const financeContent = await agentFetch(4, '재무·리스크 분석', { ...base, type: 'full-plan-finance', idea, marketContent: cap(marketContent, 8000), competitionContent: cap(competitionContent, 8000), strategyContent: cap(strategyContent, 8000), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(1 * agentEtaMs);
 
     // 섹션 순서대로 조합
@@ -1109,7 +1098,9 @@ function WorkflowPageInner() {
       setCurrentFullPlanIndex(newPlans.length - 1);
       setStep('view-full-plan');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      console.error('[풀버전 생성 오류]', err);
+      const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err);
+      setError(msg || '알 수 없는 오류가 발생했습니다.');
       setStep('view-plan');
     } finally {
       setIsLoading(false);
@@ -1242,10 +1233,26 @@ function WorkflowPageInner() {
       const raw = [strategyContent, marketContent, competitionContent, financeContent]
         .filter(Boolean)
         .join('\n\n---\n\n');
-      return `# ${ideaName} 사업기획서 (풀버전)\n\n${raw}`;
+      return sanitizeMarkdown(`# ${ideaName} 사업기획서 (풀버전)\n\n${raw}`);
     }
 
-    return `# ${ideaName} 사업기획서 (풀버전)\n\n${ordered.join('\n\n---\n\n')}`;
+    const combined = `# ${ideaName} 사업기획서 (풀버전)\n\n${ordered.join('\n\n---\n\n')}`;
+    return sanitizeMarkdown(combined);
+  }
+
+  /** 마크다운 표·코드블록 앞뒤에 빈 줄 보장 (파서 깨짐 방지) */
+  function sanitizeMarkdown(md: string): string {
+    return md
+      // 표 앞뒤에 빈 줄 보장: |로 시작하는 줄 블록 앞뒤
+      .replace(/([^\n])\n(\|[^\n]+\|)/g, '$1\n\n$2')
+      .replace(/(\|[^\n]+\|)\n([^\n|])/g, '$1\n\n$2')
+      // 코드블록 앞뒤에 빈 줄 보장
+      .replace(/([^\n])\n(```)/g, '$1\n\n$2')
+      .replace(/(```)\n([^\n])/g, '$1\n\n$2')
+      // 헤딩 앞에 빈 줄 보장
+      .replace(/([^\n])\n(#{2,4}\s)/g, '$1\n\n$2')
+      // 연속 빈 줄 3개 이상을 2개로 정리
+      .replace(/\n{4,}/g, '\n\n\n');
   }
 
   function stripMarkdownForAI(content: string): string {
