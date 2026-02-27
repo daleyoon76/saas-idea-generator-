@@ -554,7 +554,7 @@ function WorkflowPageInner() {
       }
 
       const data = await res.json();
-      setRawResponse(data.response);
+      setRawResponse(appendTruncationWarning(data.response, data.meta));
 
       // Parse JSON from response
       let parsed = null;
@@ -768,12 +768,15 @@ function WorkflowPageInner() {
         }
 
         const data = await res.json();
+        // 잘림 경고 + 섹션 완성도 검증
+        let planContent = appendTruncationWarning(data.response, data.meta);
+        planContent = validateDraftSections(planContent);
 
         updateStoredTiming('planLLM', Date.now() - planLLMStart);
         plans.push({
           ideaId: idea.id,
           ideaName: idea.name,
-          content: data.response,
+          content: planContent,
           createdAt: new Date().toISOString(),
         });
         completedIdeas += 1;
@@ -1199,7 +1202,7 @@ function WorkflowPageInner() {
       const newPRD: PRD = {
         ideaId: idea.id,
         ideaName: idea.name,
-        content: data.response,
+        content: appendTruncationWarning(data.response, data.meta),
         createdAt: new Date().toISOString(),
       };
 
@@ -1239,6 +1242,47 @@ function WorkflowPageInner() {
     const insertPos = sec2Match.index;
     const riskBlock = `\n\n### 주요 리스크 (Devil's Advocate)\n\n${riskSummary}\n`;
     return combined.slice(0, insertPos) + riskBlock + combined.slice(insertPos);
+  }
+
+  // ── 출력 검증 헬퍼 ───────────────────────────────────────────────────────
+
+  /** 잘림 경고 마크다운 */
+  const TRUNCATION_WARNING = '\n\n---\n\n> ⚠️ **출력 잘림**: AI 모델이 토큰 한도에 도달해 내용이 중간에 잘렸습니다. 다른 모델로 전환하거나 다시 시도해 주세요.\n';
+
+  /** 응답에 잘림이 감지되면 경고를 본문 끝에 추가 */
+  function appendTruncationWarning(content: string, meta?: { truncated?: boolean }): string {
+    if (meta?.truncated) return content + TRUNCATION_WARNING;
+    return content;
+  }
+
+  /** 초안 기획서(business-plan) 섹션 완성도 검증: ## 1. ~ ## 13. 최소 10개 */
+  function validateDraftSections(content: string): string {
+    const found: number[] = [];
+    for (let i = 1; i <= 13; i++) {
+      const pattern = new RegExp(`##\\s+\\**${i}[.．]`);
+      if (pattern.test(content)) found.push(i);
+    }
+    if (found.length < 10) {
+      const missing = Array.from({ length: 13 }, (_, i) => i + 1).filter(n => !found.includes(n));
+      const warning = `> ⚠️ **섹션 누락 경고**: 다음 섹션이 생성되지 않았습니다: ${missing.map(n => `섹션 ${n}`).join(', ')}. AI 모델의 출력 한도로 인해 내용이 잘렸을 수 있습니다.\n\n`;
+      return warning + content;
+    }
+    return content;
+  }
+
+  /** 풀버전 기획서 섹션 완성도 검증: 섹션 1~13 + 참고문헌 */
+  function validateFullPlanSections(content: string): string {
+    const missing: string[] = [];
+    for (let i = 1; i <= 13; i++) {
+      const pattern = new RegExp(`##\\s+\\**${i}[.．](?![0-9])`);
+      if (!pattern.test(content)) missing.push(`섹션 ${i}`);
+    }
+    if (!/##\s+\**참고문헌/.test(content)) missing.push('참고문헌');
+    if (missing.length > 0) {
+      const warning = `> ⚠️ **섹션 누락 경고**: 다음 섹션이 생성되지 않았습니다: ${missing.join(', ')}. AI 모델의 출력 한도로 인해 내용이 잘렸을 수 있습니다.\n\n`;
+      return warning + content;
+    }
+    return content;
   }
 
   // ── 풀버전 생성 파이프라인 (검색 → Agent 1~4 → 조합) ──────────────────
@@ -1287,14 +1331,15 @@ function WorkflowPageInner() {
     // 검색결과도 캡 (snippet만 추려서 크기 줄임)
     const cappedSearch = planSearchResults.slice(0, 5).map(r => ({ title: r.title, url: r.url, snippet: (r.snippet || '').slice(0, 300) }));
 
-    // 안전한 fetch: body 크기 로깅 + 에이전트별 에러 메시지
+    // 안전한 fetch: body 크기 로깅 + 에이전트별 에러 메시지 + 잘림 감지
     async function agentFetch(agentNum: number, agentLabel: string, payload: Record<string, unknown>): Promise<string> {
       const bodyStr = JSON.stringify(payload);
       console.log(`[에이전트 ${agentNum}] request body: ${Math.round(bodyStr.length / 1024)}KB`);
       const r = await fetchWithTimeout('/api/generate', { method: 'POST', headers, body: bodyStr });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(`[에이전트 ${agentNum}] ${agentLabel} 실패: ${e?.error || r.statusText}`); }
-      const content = (await r.json()).response as string;
-      onAgentComplete(agentNum, `"${idea.name}" ${agentLabel} 완료`);
+      const data = await r.json();
+      const content = appendTruncationWarning(data.response as string, data.meta);
+      onAgentComplete(agentNum, `"${idea.name}" ${agentLabel} 완료${data.meta?.truncated ? ' (잘림 감지)' : ''}`);
       return content;
     }
 
@@ -1339,7 +1384,8 @@ function WorkflowPageInner() {
         console.warn(`[Agent 5] Devil's Advocate 실패 (${r5.status}):`, errBody?.error || r5.statusText);
         onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 생략 (${r5.status})`);
       } else {
-        const devilContent = (await r5.json()).response as string;
+        const r5Data = await r5.json();
+        const devilContent = appendTruncationWarning(r5Data.response as string, r5Data.meta);
         // RISK_SUMMARY 블록 추출 → Section 1에 삽입, Section 14 추가
         const riskSummary = extractRiskSummary(devilContent);
         const section14 = stripRiskSummary(devilContent);
@@ -1348,17 +1394,20 @@ function WorkflowPageInner() {
           mergedCombined = injectRiskIntoExecSummary(combined, riskSummary);
         }
         finalContent = mergedCombined.trimEnd() + '\n\n---\n\n' + section14;
-        onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 완료`);
+        onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 완료${r5Data.meta?.truncated ? ' (잘림 감지)' : ''}`);
       }
     } catch (e) {
       console.warn('[Agent 5] Devil\'s Advocate 예외:', e);
       onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 생략`);
     }
 
+    // 풀버전 섹션 완성도 검증
+    const validatedContent = validateFullPlanSections(finalContent);
+
     return {
       ideaId: idea.id,
       ideaName: idea.name,
-      content: finalContent,
+      content: validatedContent,
       createdAt: new Date().toISOString(),
       version: 'full',
     };
@@ -2176,6 +2225,7 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
                       if (/language-mermaid/.test(className || '')) {
@@ -2378,6 +2428,7 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
                       if (/language-mermaid/.test(className || '')) {
@@ -2484,6 +2535,7 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
                       if (/language-mermaid/.test(className || '')) {

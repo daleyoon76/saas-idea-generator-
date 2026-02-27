@@ -4,6 +4,9 @@ import path from 'path';
 import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, createFullPlanDevilPrompt, SearchResult } from '@/lib/prompts';
 import { Idea } from '@/lib/types';
 
+/** LLM 응답 결과: 텍스트 + 잘림 여부 */
+type LLMResult = { text: string; truncated: boolean };
+
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 
 // YAML frontmatter(--- ... ---) 제거
@@ -167,26 +170,29 @@ export async function POST(request: NextRequest) {
       'extract-idea':          4000,
     };
     const maxTokens = TOKEN_LIMITS[type] ?? 9000;
-    let response: string;
+    let result: LLMResult;
 
     switch (provider) {
       case 'ollama':
-        response = await generateWithOllama(model || 'gemma2:9b', prompt, jsonMode);
+        result = await generateWithOllama(model || 'gemma2:9b', prompt, jsonMode);
         break;
       case 'claude':
-        response = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
+        result = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
         break;
       case 'gemini':
-        response = await generateWithGemini(model || 'gemini-2.5-flash', prompt, maxTokens, jsonMode);
+        result = await generateWithGemini(model || 'gemini-2.5-flash', prompt, maxTokens, jsonMode);
         break;
       case 'openai':
-        response = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
+        result = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
         break;
       default:
         return NextResponse.json({ error: '지원하지 않는 AI 공급자입니다.' }, { status: 400 });
     }
 
-    return NextResponse.json({ response });
+    return NextResponse.json({
+      response: result.text,
+      meta: { truncated: result.truncated },
+    });
   } catch (error) {
     console.error('Generate API error:', error);
     return NextResponse.json(
@@ -196,7 +202,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function generateWithOllama(model: string, prompt: string, jsonMode: boolean = false): Promise<string> {
+async function generateWithOllama(model: string, prompt: string, jsonMode: boolean = false): Promise<LLMResult> {
   const body: Record<string, unknown> = {
     model,
     prompt,
@@ -213,10 +219,12 @@ async function generateWithOllama(model: string, prompt: string, jsonMode: boole
   });
   if (!response.ok) throw new Error(`Ollama 오류: ${response.statusText}`);
   const data = await response.json();
-  return data.response;
+  // Ollama done_reason: 'stop' (정상) | 'length' (토큰 한도)
+  const truncated = data.done_reason === 'length';
+  return { text: data.response, truncated };
 }
 
-async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<string> {
+async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<LLMResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -275,13 +283,16 @@ async function generateWithClaude(model: string, prompt: string, maxTokens: numb
     }
 
     const data = await response.json();
-    return data.content[0].text;
+    const text: string = data.content[0].text;
+    // stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence'
+    const truncated = data.stop_reason === 'max_tokens';
+    return { text, truncated };
   }
 
   throw new Error('Claude API: 서버 과부하로 재시도 한도 초과. 잠시 후 다시 시도하거나 다른 모델을 선택해주세요.');
 }
 
-async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192, jsonMode: boolean = false): Promise<string> {
+async function generateWithGemini(model: string, prompt: string, maxTokens: number = 8192, jsonMode: boolean = false): Promise<LLMResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -311,23 +322,11 @@ async function generateWithGemini(model: string, prompt: string, maxTokens: numb
 
   const text: string = candidate.content?.parts?.[0]?.text ?? '';
   const finishReason: string = candidate.finishReason ?? 'STOP';
-  const usedTokens: number = data.usageMetadata?.candidatesTokenCount ?? 0;
-
-  // 토큰 한도 초과로 잘린 경우 — 본문 뒤에 경고 삽입
-  if (finishReason === 'MAX_TOKENS') {
-    return (
-      text +
-      `\n\n---\n` +
-      `> ⚠️ **출력 잘림 (MAX_TOKENS)**: \`${model}\` 모델이 출력 토큰 한도에 도달해 내용이 중간에 잘렸습니다.\n` +
-      `> 사용된 출력 토큰: **${usedTokens}** / 요청 한도: **${maxTokens}**\n` +
-      `> **해결 방법**: Gemini Pro 모델 또는 Claude/OpenAI로 전환하면 전체 내용을 받을 수 있습니다.`
-    );
-  }
-
-  return text;
+  const truncated = finishReason === 'MAX_TOKENS';
+  return { text, truncated };
 }
 
-async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<string> {
+async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<LLMResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다. .env.local 파일에 추가해주세요.');
 
@@ -379,7 +378,10 @@ async function generateWithOpenAI(model: string, prompt: string, maxTokens: numb
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    const text: string = data.choices[0].message.content;
+    // finish_reason: 'stop' (정상) | 'length' (토큰 한도)
+    const truncated = data.choices[0].finish_reason === 'length';
+    return { text, truncated };
   }
 
   throw new Error('OpenAI API: Rate limit 재시도 한도 초과. 잠시 후 다시 시도해주세요.');
