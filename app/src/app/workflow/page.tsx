@@ -38,38 +38,205 @@ function formatTime(seconds: number): string {
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun, AlignmentType } from 'docx';
 import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
+
+/** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
+function sanitizeMermaidSyntax(src: string): string {
+  let result = src
+    // box-drawing lines (─ ━ ═) + em/en dashes → standard --
+    .replace(/[─━═\u2500\u2501\u2550—–\u2014\u2013]{1,4}>/g, '-->')
+    // Unicode arrows → -->
+    .replace(/[→⟶⟹➜➝➞⟵⟷]/g, '-->')
+    // fullwidth >
+    .replace(/＞/g, '>')
+    // curly/smart quotes → straight quotes
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+    // diagram type 선언 뒤 불필요한 세미콜론 제거 (flowchart TD; → flowchart TD)
+    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|quadrantChart|xychart-beta)\b[^;\n]*);/gm, '$1');
+
+  // quadrantChart 보정
+  if (/^\s*quadrantChart/m.test(result)) {
+    // 1a. 축 라벨 왼쪽 (-->앞): unquoted → 따옴표 감싸기
+    result = result.replace(
+      /^(\s*(?:x|y)-axis\s+)(?!")(.+?)(\s*-->)/gm,
+      (_, pre: string, label: string, arrow: string) => {
+        const t = label.trim();
+        return t ? `${pre}"${t}"${arrow}` : `${pre}${label}${arrow}`;
+      }
+    );
+    // 1b. 축 라벨 오른쪽 (-->뒤): unquoted → 따옴표 감싸기
+    result = result.replace(
+      /^(\s*(?:x|y)-axis\s+.+?-->\s*)(?!")([^"\n]+)$/gm,
+      (_, pre: string, label: string) => {
+        const t = label.trim();
+        return t ? `${pre}"${t}"` : `${pre}${label}`;
+      }
+    );
+    // 1c. 축 라벨 단일 (-->없음): unquoted → 따옴표 감싸기
+    result = result.replace(
+      /^(\s*(?:x|y)-axis\s+)(?!")([^"\n]+)$/gm,
+      (match, pre: string, label: string) => {
+        if (label.includes('-->')) return match;
+        const t = label.trim();
+        return t ? `${pre}"${t}"` : match;
+      }
+    );
+
+    // 2. 데이터 포인트 () → [] 소괄호를 대괄호로 변환
+    result = result.replace(
+      /:\s*\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\)/g,
+      ': [$1, $2]'
+    );
+
+    // 3. 데이터 포인트: unquoted 라벨을 따옴표로 감싸기
+    result = result.replace(
+      /^(\s*)(?!"|quadrantChart|title|x-axis|y-axis|quadrant-)([^":\n]+?)(\s*:\s*\[)/gm,
+      '$1"$2"$3'
+    );
+
+    // 4. 좌표 값이 0~1 범위를 벗어나면 자동 정규화
+    const dataRe = /:\s*\[(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\]/g;
+    const values: number[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = dataRe.exec(result)) !== null) {
+      values.push(parseFloat(m[1]), parseFloat(m[2]));
+    }
+    const maxVal = Math.max(...values, 1);
+    if (maxVal > 1) {
+      result = result.replace(dataRe, (_, x: string, y: string) => {
+        const nx = Math.min(parseFloat(x) / maxVal, 0.99).toFixed(2);
+        const ny = Math.min(parseFloat(y) / maxVal, 0.99).toFixed(2);
+        return `: [${nx}, ${ny}]`;
+      });
+    }
+  }
+
+  return result;
+}
+
+/** Render a mermaid chart to PNG for docx embedding. Returns null on failure. */
+async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+  try {
+    const sanitized = sanitizeMermaidSyntax(chart);
+    const m = await import('mermaid');
+    m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
+      primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
+      lineColor: '#8B3520', textColor: '#3D1E10',
+    }});
+    const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
+    const offscreen = document.createElement('div');
+    offscreen.style.position = 'absolute';
+    offscreen.style.left = '-99999px';
+    document.body.appendChild(offscreen);
+    let svg: string;
+    try {
+      ({ svg } = await m.default.render(id, sanitized, offscreen));
+    } finally {
+      offscreen.remove();
+    }
+
+    // Parse SVG to set explicit dimensions for Image loading
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+    const svgEl = svgDoc.querySelector('svg');
+    if (!svgEl) return null;
+
+    let w = parseFloat(svgEl.getAttribute('width') || '0');
+    let h = parseFloat(svgEl.getAttribute('height') || '0');
+    const vb = svgEl.getAttribute('viewBox');
+    if ((!w || !h) && vb) {
+      const parts = vb.split(/[\s,]+/);
+      if (parts.length === 4) { w = parseFloat(parts[2]) || 600; h = parseFloat(parts[3]) || 400; }
+    }
+    if (!w) w = 600;
+    if (!h) h = 400;
+    svgEl.setAttribute('width', String(w));
+    svgEl.setAttribute('height', String(h));
+    const fixedSvg = new XMLSerializer().serializeToString(svgEl);
+
+    const blob = new Blob([fixedSvg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = w * scale;
+        canvas.height = h * scale;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((pngBlob) => {
+          if (!pngBlob) { resolve(null); return; }
+          pngBlob.arrayBuffer().then(buf => resolve({ data: new Uint8Array(buf), width: w, height: h }));
+        }, 'image/png');
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  } catch {
+    return null;
+  }
+}
 
 function MermaidDiagram({ chart }: { chart: string }) {
   const mermaidRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState(false);
+  const [fit, setFit] = useState(false);
+  const sanitized = sanitizeMermaidSyntax(chart);
 
   useEffect(() => {
     let cancelled = false;
+    const cleaned = sanitizeMermaidSyntax(chart);
+    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+    const offscreen = document.createElement('div');
+    offscreen.style.position = 'absolute';
+    offscreen.style.left = '-99999px';
+    offscreen.style.top = '-99999px';
+    document.body.appendChild(offscreen);
+
     import('mermaid').then((m) => {
       m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
         primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
         lineColor: '#8B3520', textColor: '#3D1E10',
       }});
-      const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
-      m.default.render(id, chart)
+      m.default.render(id, cleaned, offscreen)
         .then(({ svg: renderedSvg }) => { if (!cancelled) setSvg(renderedSvg); })
-        .catch(() => { if (!cancelled) setError(true); });
+        .catch((err) => { if (!cancelled) { console.warn('[Mermaid] render failed:', err, '\nSanitized input:', cleaned); setError(true); } })
+        .finally(() => { offscreen.remove(); });
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; offscreen.remove(); };
   }, [chart]);
+
+  // SVG 렌더 후: 자연 폭 < 컨테이너 폭이면 확대(fit), 아니면 스크롤
+  useEffect(() => {
+    if (!svg || !mermaidRef.current) return;
+    const svgEl = mermaidRef.current.querySelector('svg');
+    if (!svgEl) return;
+    const svgWidth = svgEl.viewBox?.baseVal?.width || svgEl.getBoundingClientRect().width || 0;
+    const containerWidth = mermaidRef.current.clientWidth;
+    setFit(svgWidth <= containerWidth);
+  }, [svg]);
 
   if (error) {
     return <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5"
-      style={{ backgroundColor: '#F5EDE6', color: '#3D1008', fontFamily: 'var(--font-mono), monospace' }}>{chart}</pre>;
+      style={{ backgroundColor: '#F5EDE6', color: '#3D1008', fontFamily: 'var(--font-mono), monospace' }}>{sanitized}</pre>;
   }
-  return <div className="my-4 overflow-x-auto flex justify-center"
+  return <div className={`my-4 overflow-x-auto mermaid-wrap${fit ? ' fit' : ''}`}
+    style={{ width: '100%' }}
+    ref={mermaidRef}
     dangerouslySetInnerHTML={{ __html: svg }} />;
 }
+
 
 function WorkflowPageInner() {
   const searchParams = useSearchParams();
@@ -706,6 +873,52 @@ function WorkflowPageInner() {
         children.push(table);
         children.push(new Paragraph({ text: '', spacing: { after: 120 } }));
 
+      // 코드 블록 (```mermaid → 이미지 삽입, 그 외 → 코드 스타일 텍스트)
+      } else if (/^```/.test(line)) {
+        const lang = line.replace(/^```/, '').trim().toLowerCase();
+        const blockLines: string[] = [];
+        i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+          blockLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing ```
+
+        if (lang === 'mermaid') {
+          const chart = blockLines.join('\n');
+          const img = await renderMermaidToPng(chart);
+          if (img) {
+            // 페이지 폭(A4 ~468pt ≈ 580px)에 맞게 축소
+            const maxW = 560;
+            const scale = Math.min(1, maxW / img.width);
+            const finalW = Math.round(img.width * scale);
+            const finalH = Math.round(img.height * scale);
+            children.push(new Paragraph({
+              children: [new ImageRun({ data: img.data, transformation: { width: finalW, height: finalH }, type: 'png' })],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 200 },
+            }));
+          } else {
+            // Mermaid 렌더 실패 시 코드 블록으로 표시
+            for (const codeLine of blockLines) {
+              children.push(new Paragraph({
+                children: [new TextRun({ text: codeLine, size: 18, color: DC.textMid, font: { name: 'Consolas', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
+                shading: { type: ShadingType.CLEAR, fill: 'F5EDE6', color: 'auto' },
+                spacing: { after: 20 },
+              }));
+            }
+          }
+        } else {
+          // 일반 코드 블록
+          for (const codeLine of blockLines) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: codeLine, size: 18, color: DC.textMid, font: { name: 'Consolas', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
+              shading: { type: ShadingType.CLEAR, fill: 'F5EDE6', color: 'auto' },
+              spacing: { after: 20 },
+            }));
+          }
+        }
+
       // 불릿 리스트
       } else if (/^[-*] /.test(line)) {
         children.push(new Paragraph({
@@ -1336,8 +1549,12 @@ function WorkflowPageInner() {
 
   /** 마크다운 표·코드블록 앞뒤에 빈 줄 보장 + 다이어그램 코드펜스 래핑 */
   function sanitizeMarkdown(md: string): string {
+    // 0. 근본 정규화: CRLF→LF, 공백전용 줄→빈 줄, 테이블 행 trailing whitespace 제거
+    let result = md
+      .replace(/\r\n/g, '\n')
+      .replace(/^[ \t]+$/gm, '')
+      .replace(/^(\|.*\|)[ \t]+$/gm, '$1');
     // 1. 표 행 사이의 빈 줄 제거: |로 시작하는 연속 행들 사이의 공백 줄을 제거
-    let result = md;
     while (/(\|[^\n]+\|)\n\n+(\|)/.test(result)) {
       result = result.replace(/(\|[^\n]+\|)\n\n+(\|)/g, '$1\n$2');
     }
@@ -1416,7 +1633,7 @@ function WorkflowPageInner() {
             </svg>
             홈으로
           </Link>
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 transition hover:opacity-70">
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ background: `linear-gradient(135deg, ${C.amber}, ${C.amberLight})` }}
@@ -1426,7 +1643,7 @@ function WorkflowPageInner() {
               </svg>
             </div>
             <span className="font-semibold text-sm" style={{ color: C.textDark }}>My CSO</span>
-          </div>
+          </Link>
           {/* Provider 상태 */}
           <div className="text-xs">
             {availableProviders[selectedProvider] === null ? (

@@ -42,3 +42,11 @@ code, pre, kbd {
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* Mermaid 다이어그램: 작은 SVG는 확대, 넓은 SVG는 스크롤 */
+.mermaid-wrap svg {
+  height: auto;
+}
+.mermaid-wrap.fit svg {
+  width: 100%;
+}
