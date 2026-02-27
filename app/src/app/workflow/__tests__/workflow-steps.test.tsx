@@ -429,36 +429,3 @@ describe('Workflow: Save Execution', () => {
   }, 25000);
 });
 
-describe('Workflow: Import Flow', () => {
-  it('import paste: can type text and trigger analysis', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
-    const claudeButtons = screen.getAllByText(/Claude/i);
-    if (claudeButtons.length > 0) await user.click(claudeButtons[0]);
-
-    // Switch to import > paste
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-    await user.click(screen.getByText('텍스트 붙여넣기'));
-
-    // Type plan content
-    const textarea = screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i);
-    await user.type(textarea, '# 기존 사업기획서\n\n## 핵심요약\n테스트 기획서입니다.');
-
-    // Click analyze
-    const analyzeBtn = screen.getByRole('button', { name: /기획서 분석 시작/i });
-    await user.click(analyzeBtn);
-
-    // It should call extract-idea API (may quickly transition to view-plan)
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/generate'),
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.stringContaining('extract-idea'),
-        }),
-      );
-    }, { timeout: 5000 });
-  }, 15000);
-});

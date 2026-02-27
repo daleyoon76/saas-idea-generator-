@@ -29,7 +29,6 @@ export interface PRD {
 
 export type WorkflowStep =
   | 'keyword'
-  | 'importing-plan'
   | 'generating-ideas'
   | 'select-ideas'
   | 'generating-plan'
@@ -86,6 +85,7 @@ export interface GuidedResult {
   businessPlan: BusinessPlan;
   provider: AIProvider;
   model: string;
+  importedPlanContent?: string;
 }
 
 export const GUIDED_RESULT_KEY = 'guided-result';

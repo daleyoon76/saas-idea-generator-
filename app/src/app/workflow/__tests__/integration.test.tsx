@@ -129,13 +129,6 @@ describe('Workflow Integration', () => {
     expect(screen.getByText('사용할 AI 모델 선택')).toBeInTheDocument();
   });
 
-  it('shows tab for keyword vs import modes', () => {
-    render(<WorkflowPage />);
-
-    expect(screen.getByText('키워드로 아이디어 발굴')).toBeInTheDocument();
-    expect(screen.getByText('기존 기획서 가져오기')).toBeInTheDocument();
-  });
-
   it('shows keyword input heading and optional note', () => {
     render(<WorkflowPage />);
 
@@ -164,69 +157,6 @@ describe('Workflow Integration', () => {
     expect(qualityLabels.length).toBeGreaterThanOrEqual(4);
     expect(speedLabels.length).toBeGreaterThanOrEqual(4);
     expect(costLabels.length).toBeGreaterThanOrEqual(4);
-  });
-
-  it('can switch to import tab and shows paste option', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    // Click import tab
-    const importTab = screen.getByText('기존 기획서 가져오기');
-    await user.click(importTab);
-
-    // Should show import heading
-    await waitFor(() => {
-      expect(screen.getByText('기존 사업기획서 가져오기')).toBeInTheDocument();
-    });
-
-    // Should show file upload and paste buttons
-    expect(screen.getByText(/파일 업로드/i)).toBeInTheDocument();
-    expect(screen.getByText('텍스트 붙여넣기')).toBeInTheDocument();
-  });
-
-  it('shows paste textarea when paste button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    // Click import tab
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-
-    // Click paste mode
-    await user.click(screen.getByText('텍스트 붙여넣기'));
-
-    // Should show textarea
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i)).toBeInTheDocument();
-    });
-
-    // Should show analyze button
-    expect(screen.getByText(/기획서 분석 시작/i)).toBeInTheDocument();
-  });
-
-  it('shows drag zone when in file import mode', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-
-    // File mode is default in import mode
-    await waitFor(() => {
-      expect(screen.getByText(/파일을 드래그하여 놓거나 클릭하여 선택/i)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/.md, .txt, .docx 지원/i)).toBeInTheDocument();
-  });
-
-  it('can switch back to keyword mode from import', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    // Switch to import
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-    expect(screen.getByText('기존 사업기획서 가져오기')).toBeInTheDocument();
-
-    // Switch back to keyword
-    await user.click(screen.getByText('키워드로 아이디어 발굴'));
-    expect(screen.getByPlaceholderText(/AI, 헬스케어/i)).toBeInTheDocument();
   });
 
   it('can select a different provider', async () => {
@@ -337,39 +267,4 @@ describe('Workflow Integration', () => {
     expect(screen.getByText(/상세 사업기획서를 작성할 아이디어를 선택하세요/i)).toBeInTheDocument();
   }, 15000);
 
-  it('import paste mode: analyze button is disabled when no text', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
-    const claudeButtons = screen.getAllByText(/Claude/i);
-    if (claudeButtons.length > 0) await user.click(claudeButtons[0]);
-
-    // Switch to import > paste
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-    await user.click(screen.getByText('텍스트 붙여넣기'));
-
-    const analyzeBtn = screen.getByRole('button', { name: /기획서 분석 시작/i });
-    expect(analyzeBtn).toBeDisabled();
-  });
-
-  it('import paste mode: analyze button enables with text and provider', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-
-    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
-    const claudeButtons = screen.getAllByText(/Claude/i);
-    if (claudeButtons.length > 0) await user.click(claudeButtons[0]);
-
-    // Switch to import > paste
-    await user.click(screen.getByText('기존 기획서 가져오기'));
-    await user.click(screen.getByText('텍스트 붙여넣기'));
-
-    // Type text
-    const textarea = screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i);
-    await user.type(textarea, '# 테스트 기획서');
-
-    const analyzeBtn = screen.getByRole('button', { name: /기획서 분석 시작/i });
-    expect(analyzeBtn).not.toBeDisabled();
-  });
 });

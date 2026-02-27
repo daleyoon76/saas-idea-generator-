@@ -51,6 +51,15 @@ export default function GuidedPage() {
   });
   const [showProviderPanel, setShowProviderPanel] = useState(false);
 
+  // 페이지 모드: 직접 입력(wizard) vs 기존 기획서 가져오기(import)
+  const [pageMode, setPageMode] = useState<'wizard' | 'import'>('wizard');
+
+  // 기획서 Import 관련 상태
+  const [importMode, setImportMode] = useState<'file' | 'paste'>('file');
+  const [pasteText, setPasteText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   // 생성 상태
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -233,6 +242,136 @@ export default function GuidedPage() {
     }
   }
 
+  // ── 기획서 Import ─────────────────────────────────────────
+  async function handleImportPlan(content: string) {
+    if (!content.trim()) {
+      setError('기획서 내용이 비어있습니다.');
+      return;
+    }
+
+    setGuidedStep('generating');
+    setError(null);
+    setLoadingMessage('기획서에서 핵심 정보를 추출하는 중...');
+    setProgressCurrent(0);
+    setCompletedSteps([]);
+    startTimer();
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          model: selectedModels[selectedProvider],
+          type: 'extract-idea',
+          planContent: content,
+        }),
+      });
+
+      if (!res.ok) throw new Error('기획서 분석 실패');
+      const data = await res.json();
+      const response = data.response as string;
+
+      // JSON 파싱 (여러 패턴 시도)
+      let extracted: Record<string, unknown> | null = null;
+      const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        try { extracted = JSON.parse(jsonBlockMatch[1]); } catch { /* ignore */ }
+      }
+      if (!extracted) {
+        const rawMatch = response.match(/\{[\s\S]*"name"[\s\S]*\}/);
+        if (rawMatch) {
+          try { extracted = JSON.parse(rawMatch[0]); } catch { /* ignore */ }
+        }
+      }
+      if (!extracted) {
+        try { extracted = JSON.parse(response); } catch { /* ignore */ }
+      }
+
+      const syntheticIdea: Idea = {
+        id: -1,
+        name: (extracted?.name as string) || '가져온 기획서',
+        category: (extracted?.category as string) || '미분류',
+        oneLiner: (extracted?.oneLiner as string) || '',
+        target: (extracted?.target as string) || '',
+        problem: (extracted?.problem as string) || '',
+        features: (extracted?.features as string[]) || [],
+        differentiation: (extracted?.differentiation as string) || '',
+        revenueModel: (extracted?.revenueModel as string) || '',
+        mvpDifficulty: (extracted?.mvpDifficulty as string) || '중',
+        rationale: (extracted?.rationale as string) || '',
+      };
+
+      const syntheticPlan: BusinessPlan = {
+        ideaId: -1,
+        ideaName: syntheticIdea.name,
+        content,
+        createdAt: new Date().toISOString(),
+        version: 'draft',
+      };
+
+      setProgressCurrent(1);
+      setCompletedSteps(['기획서 분석 완료']);
+
+      // sessionStorage에 결과 저장 → workflow로 이동
+      const result: GuidedResult = {
+        idea: syntheticIdea,
+        businessPlan: syntheticPlan,
+        provider: selectedProvider,
+        model: selectedModels[selectedProvider],
+        importedPlanContent: content,
+      };
+      sessionStorage.setItem(GUIDED_RESULT_KEY, JSON.stringify(result));
+      router.push('/workflow?from=guided');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
+      setGuidedStep(1);
+      setPageMode('import');
+    } finally {
+      setLoadingMessage('');
+      stopTimer();
+    }
+  }
+
+  async function processImportFile(file: File) {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['md', 'txt', 'docx'].includes(ext || '')) {
+      setError('.md, .txt 또는 .docx 파일만 지원합니다.');
+      return;
+    }
+
+    if (ext === 'docx') {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/parse-docx', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('DOCX 파싱 실패');
+        const data = await res.json();
+        handleImportPlan(data.text);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'DOCX 파일 읽기 실패');
+      }
+      return;
+    }
+
+    const text = await file.text();
+    handleImportPlan(text);
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImportFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processImportFile(file);
+  }
+
   // ── 스텝 유효성 검사 ───────────────────────────────────
   function isStepValid(s: GuidedStep): boolean {
     switch (s) {
@@ -399,8 +538,133 @@ export default function GuidedPage() {
             </div>
           )}
 
+          {/* ── 모드 선택 탭 (step 1에서만 표시) ───────────── */}
+          {typeof guidedStep === 'number' && guidedStep === 1 && (
+            <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ backgroundColor: '#F0D5C0' }}>
+              <button
+                onClick={() => { setPageMode('wizard'); setError(null); }}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={pageMode === 'wizard'
+                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: C.textMid }
+                }
+              >
+                직접 입력
+              </button>
+              <button
+                onClick={() => { setPageMode('import'); setError(null); }}
+                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={pageMode === 'import'
+                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: C.textMid }
+                }
+              >
+                기존 기획서 가져오기
+              </button>
+            </div>
+          )}
+
+          {/* ── 기획서 Import 모드 ───────────────────────────── */}
+          {typeof guidedStep === 'number' && guidedStep === 1 && pageMode === 'import' && (
+            <div className="rounded-2xl p-6 md:p-8 mb-6" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
+              <h2 className="text-xl font-bold mb-2" style={{ color: C.textDark }}>
+                기존 사업기획서 가져오기
+              </h2>
+              <p className="text-sm mb-6" style={{ color: C.textMid }}>
+                기존 기획서를 가져오면 AI가 심화 분석하거나, 바로 PRD를 생성할 수 있습니다.
+              </p>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".md,.txt,.docx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => { setImportMode('file'); fileInputRef.current?.click(); }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={importMode === 'file'
+                    ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
+                    : { border: `1.5px solid ${C.border}`, color: C.textMid }
+                  }
+                >
+                  파일 업로드 (.md, .txt, .docx)
+                </button>
+                <button
+                  onClick={() => setImportMode('paste')}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={importMode === 'paste'
+                    ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
+                    : { border: `1.5px solid ${C.border}`, color: C.textMid }
+                  }
+                >
+                  텍스트 붙여넣기
+                </button>
+              </div>
+
+              {importMode === 'file' && (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-8 rounded-xl text-center cursor-pointer transition"
+                  style={{
+                    border: `1.5px dashed ${isDragging ? C.accent : C.border}`,
+                    backgroundColor: isDragging ? C.selectedBg : '#fff',
+                  }}
+                >
+                  <svg className="w-10 h-10 mx-auto mb-3" style={{ color: isDragging ? C.accent : C.textLight }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-sm mb-1" style={{ color: isDragging ? C.accent : C.textMid }}>
+                    {isDragging ? '여기에 놓으세요' : '파일을 드래그하여 놓거나 클릭하여 선택'}
+                  </p>
+                  <p className="text-xs" style={{ color: C.textLight }}>.md, .txt, .docx 지원</p>
+                </div>
+              )}
+
+              {importMode === 'paste' && (
+                <div>
+                  <textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    placeholder="사업기획서 내용을 여기에 붙여넣으세요..."
+                    className="w-full px-4 py-3 rounded-xl outline-none text-sm resize-y"
+                    style={{
+                      border: `1.5px solid ${C.border}`,
+                      minHeight: '180px',
+                      color: C.textDark,
+                      backgroundColor: '#fff',
+                    }}
+                    onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                    onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+                  />
+                  <div className="flex justify-end mt-4">
+                    <button
+                      onClick={() => handleImportPlan(pasteText)}
+                      disabled={!pasteText.trim() || availableProviders[selectedProvider] !== true}
+                      className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff', boxShadow: `0 4px 16px rgba(194,75,37,0.3)` }}
+                    >
+                      기획서 분석 시작 →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="mt-4 p-3 rounded-lg text-sm" style={{ backgroundColor: C.error, border: `1px solid ${C.errorBorder}`, color: C.errorText }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── 질문 스텝 (1~8) ───────────────────────────── */}
-          {typeof guidedStep === 'number' && (
+          {typeof guidedStep === 'number' && pageMode === 'wizard' && (
             <>
               {/* DEV: 예시 답변 자동 입력 + 즉시 생성 */}
               {process.env.NODE_ENV === 'development' && guidedStep === 1 && (
@@ -408,7 +672,7 @@ export default function GuidedPage() {
                   onClick={() => {
                     const testAnswers: GuidedAnswers = {
                       serviceName: 'My CSO',
-                      serviceOneLiner: 'AI 에이전트 팀이 시장 조사부터 13섹션 사업기획서까지 자동 작성해주는 SaaS 기획 도우미',
+                      serviceOneLiner: 'AI 에이전트 팀이 시장 조사부터 전체 사업기획서까지 자동작성해주는 나만의 전략 기획팀',
                       category: 'B2B SaaS',
                       targetCustomer: '아이디어는 있지만 사업기획서 작성 경험이 없는 1인 창업자, 사내 신사업 담당자, 액셀러레이터 지원 준비 중인 초기 스타트업',
                       problem: '사업기획서를 처음부터 쓰려면 시장 조사, 경쟁 분석, 재무 모델링 등 전문 영역을 혼자 다뤄야 해서 2~3주 이상 소요된다. 외주를 맡기면 300만 원 이상 비용이 들고, 빠르게 검증하고 싶은 초기 단계에서 이 비용과 시간은 큰 진입장벽이다.',
@@ -417,7 +681,7 @@ export default function GuidedPage() {
                         '4개 전문 에이전트(시장·경쟁·전략·재무)가 순차 협업하여 13섹션 사업기획서 자동 생성',
                         '사업기획서 기반 PRD 자동 변환 및 .md/.docx 즉시 다운로드',
                       ],
-                      differentiation: '기존 ChatGPT 대화형은 단일 LLM이 모든 섹션을 한 번에 쓰기 때문에 깊이가 얕다. My CSO는 역할별 에이전트 4명이 이전 에이전트의 결과를 컨텍스트로 받아 순차 작성하므로 시장 데이터 기반의 일관성 있는 기획서가 나온다.',
+                      differentiation: 'ChatGPT 대화형은 단일 LLM이 모든 섹션을 한 번에 쓰기때문에 깊이가 얕다. My CSO는 역할별 에이전트 4명이 이전 에이전트의 결과를 컨텍스트로 받아 순차 작성하므로 시장 데이터 기반의 일관성 있는 기획서가 나온다. 또한 실시간 웹 검색 결과를 프롬프트에 주입해 할루시네이션을 줄인다.',
                       revenueModel: '월 구독 (SaaS)',
                       mvpDifficulty: '보통',
                     };

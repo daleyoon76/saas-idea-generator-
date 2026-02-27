@@ -88,14 +88,14 @@ function WorkflowPageInner() {
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
   const [pendingFileFormat, setPendingFileFormat] = useState<'docx' | 'md'>('docx');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [saveDirHandle, setSaveDirHandle] = useState<any>(null);
+  const [saveDirName, setSaveDirName] = useState('');
+  const [resolvedFileName, setResolvedFileName] = useState('');
   // 실측 생성 시간 (아이디어 생성 / 사업기획서 생성 완료 후 표시)
   const [lastGenTime, setLastGenTime] = useState<{ seconds: number; label: string } | null>(null);
-  // 기획서 Import 관련 상태
+  // 기획서 Import 컨텍스트 (guided 페이지에서 import 시 전달됨)
   const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
-  const [importMode, setImportMode] = useState<'file' | 'paste' | null>(null);
-  const [pasteText, setPasteText] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [batchCount, setBatchCount] = useState(0);
 
   useEffect(() => {
@@ -116,6 +116,7 @@ function WorkflowPageInner() {
           setCurrentPlanIndex(0);
           setSelectedProvider(result.provider);
           setSelectedModels(prev => ({ ...prev, [result.provider]: result.model }));
+          if (result.importedPlanContent) setImportedPlanContent(result.importedPlanContent);
           setStep('view-plan');
           sessionStorage.removeItem(GUIDED_RESULT_KEY);
         } catch (e) {
@@ -752,41 +753,104 @@ function WorkflowPageInner() {
     URL.revokeObjectURL(url);
   }
 
+  function getSaveBaseName(plan: BusinessPlan, type: 'bizplan' | 'prd') {
+    const kw = keyword || '없음';
+    if (type === 'prd') return `PRD_${kw}_${plan.ideaName}`;
+    const ver = plan.version === 'full' ? 'Full' : 'Draft';
+    return `사업기획서_${kw}_${ver}_${plan.ideaName}`;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function resolveUniqueFileName(dirHandle: any, baseName: string, ext: string): Promise<string> {
+    let candidate = `${baseName}${ext}`;
+    let num = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        await dirHandle.getFileHandle(candidate);
+        // 파일이 존재하면 번호 증가
+        num++;
+        candidate = `${baseName}_${String(num).padStart(2, '0')}${ext}`;
+      } catch {
+        // 파일이 없으면 이 이름 사용
+        break;
+      }
+    }
+    return candidate;
+  }
+
+  async function pickSaveFolder() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (window as any).showDirectoryPicker !== 'function') return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+      setSaveDirHandle(handle);
+      setSaveDirName(handle.name);
+      // 선택된 폴더에서 중복 검사하여 파일명 확정
+      if (pendingPlan) {
+        const base = getSaveBaseName(pendingPlan, pendingPlanType);
+        const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
+        const resolved = await resolveUniqueFileName(handle, base, ext);
+        setResolvedFileName(resolved);
+      }
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+    }
+  }
+
   function openSaveDialog(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan', format: 'docx' | 'md' = 'docx') {
     setPendingPlan(plan);
     setPendingPlanType(type);
     setPendingFileFormat(format);
+    // 폴더가 이미 선택되어 있으면 중복 검사 재실행
+    const base = getSaveBaseName(plan, type);
+    const ext = format === 'md' ? '.md' : '.docx';
+    if (saveDirHandle) {
+      resolveUniqueFileName(saveDirHandle, base, ext).then(setResolvedFileName).catch(() => setResolvedFileName(`${base}${ext}`));
+    } else {
+      setResolvedFileName(`${base}${ext}`);
+    }
     setShowSaveDialog(true);
   }
 
   async function executeSave() {
     if (!pendingPlan) return;
     setShowSaveDialog(false);
-    const keywordPart = keyword || '없음';
-    let baseName: string;
-    if (pendingPlanType === 'prd') {
-      baseName = `PRD_${keywordPart}_${pendingPlan.ideaName}`;
-    } else {
-      const versionLabel = pendingPlan.version === 'full' ? 'Full' : 'Draft';
-      baseName = `사업기획서_${keywordPart}_${versionLabel}_${pendingPlan.ideaName}`;
-    }
+
+    const base = getSaveBaseName(pendingPlan, pendingPlanType);
+    const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
 
     let blob: Blob;
-    let fileName: string;
     if (pendingFileFormat === 'md') {
       blob = new Blob([pendingPlan.content], { type: 'text/markdown;charset=utf-8' });
-      fileName = `${baseName}.md`;
     } else {
       blob = await buildDocxBlob(pendingPlan);
-      fileName = `${baseName}.docx`;
     }
 
-    // showSaveFilePicker: 네이티브 "다른 이름으로 저장" 다이얼로그 (Chrome/Edge)
+    // 폴더가 선택되어 있으면 → 해당 폴더에 직접 저장
+    if (saveDirHandle) {
+      try {
+        const fileName = await resolveUniqueFileName(saveDirHandle, base, ext);
+        const fileHandle = await saveDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+        // 권한 만료 등 → 폴더 해제 후 폴백
+        setSaveDirHandle(null);
+        setSaveDirName('');
+      }
+    }
+
+    // 폴더 미선택 → 네이티브 Save As 다이얼로그
+    const fileName = `${base}${ext}`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (typeof (window as any).showSaveFilePicker === 'function') {
       try {
         const mimeType = pendingFileFormat === 'md' ? 'text/markdown' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fileHandle = await (window as any).showSaveFilePicker({
           suggestedName: fileName,
@@ -797,9 +861,7 @@ function WorkflowPageInner() {
         await writable.close();
         return;
       } catch (e: unknown) {
-        // 사용자가 취소한 경우 (AbortError) → 아무것도 안 함
         if (e instanceof DOMException && e.name === 'AbortError') return;
-        // 그 외 에러 → 브라우저 다운로드로 폴백
       }
     }
 
@@ -885,11 +947,32 @@ function WorkflowPageInner() {
   }
 
   // ── 풀버전 생성 파이프라인 (검색 → Agent 1~4 → 조합) ──────────────────
+
+  // 타임아웃 래퍼: 에이전트 호출이 5분 넘으면 중단
+  async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 300000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(`요청 시간 초과 (${Math.round(timeoutMs / 1000)}초)`), timeoutMs);
+    try {
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      return res;
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error(`AI 응답 시간 초과 (${Math.round(timeoutMs / 1000)}초). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function runFullPlanPipeline(
     idea: Idea,
     onAgentComplete: (agentNum: number, agentLabel: string) => void,
     draftContent?: string,
   ): Promise<BusinessPlan> {
+    // 기존 기획서 컨텍스트: 클라이언트에서 15,000자로 캡 (프롬프트에서 8K로 재절삭됨)
+    const existingCtx = (importedPlanContent || draftContent || '').slice(0, 15000) || undefined;
+
     // 시장 조사
     let planSearchResults: SearchResult[] = [];
     try {
@@ -903,51 +986,52 @@ function WorkflowPageInner() {
     } catch { /* 검색 실패 시 빈 배열로 계속 진행 */ }
 
     const agentEtaMs = 90000;
+    const headers = { 'Content-Type': 'application/json' };
+    // 이전 에이전트 출력 캡 (request body 과대 방지, 서버 프롬프트에서 재절삭됨)
+    const cap = (s: string, max = 25000) => s.length > max ? s.slice(0, max) : s;
+    // 검색결과도 캡 (snippet만 추려서 크기 줄임)
+    const cappedSearch = planSearchResults.slice(0, 8);
 
     // Agent 1: 시장·문제
     setLoadingMessage(`[에이전트 1/5] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
-    const r1 = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+    const r1 = await fetchWithTimeout('/api/generate', {
+      method: 'POST', headers,
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: cappedSearch, existingPlanContent: existingCtx }),
     });
-    if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
+    if (!r1.ok) { const e = await r1.json().catch(() => ({})); throw new Error(`[에이전트 1] 시장 분석 실패: ${e?.error || r1.statusText}`); }
     const marketContent = (await r1.json()).response as string;
     onAgentComplete(1, `"${idea.name}" 시장·트렌드·TAM 분석 완료`);
     updateEta(4 * agentEtaMs);
 
     // Agent 2: 경쟁·차별화
     setLoadingMessage(`[에이전트 2/5] "${idea.name}" 경쟁·차별화 분석 중...`);
-    const r2 = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+    const r2 = await fetchWithTimeout('/api/generate', {
+      method: 'POST', headers,
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent: cap(marketContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
     });
-    if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
+    if (!r2.ok) { const e = await r2.json().catch(() => ({})); throw new Error(`[에이전트 2] 경쟁 분석 실패: ${e?.error || r2.statusText}`); }
     const competitionContent = (await r2.json()).response as string;
     onAgentComplete(2, `"${idea.name}" 경쟁·차별화 분석 완료`);
     updateEta(3 * agentEtaMs);
 
     // Agent 3: 전략·솔루션
     setLoadingMessage(`[에이전트 3/5] "${idea.name}" 전략·로드맵 수립 중...`);
-    const r3 = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+    const r3 = await fetchWithTimeout('/api/generate', {
+      method: 'POST', headers,
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
     });
-    if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
+    if (!r3.ok) { const e = await r3.json().catch(() => ({})); throw new Error(`[에이전트 3] 전략 수립 실패: ${e?.error || r3.statusText}`); }
     const strategyContent = (await r3.json()).response as string;
     onAgentComplete(3, `"${idea.name}" 전략·로드맵 수립 완료`);
     updateEta(2 * agentEtaMs);
 
     // Agent 4: 재무·리스크
     setLoadingMessage(`[에이전트 4/5] "${idea.name}" 재무·리스크 분석 중...`);
-    const r4 = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+    const r4 = await fetchWithTimeout('/api/generate', {
+      method: 'POST', headers,
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), strategyContent: cap(strategyContent), searchResults: cappedSearch, existingPlanContent: existingCtx }),
     });
-    if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
+    if (!r4.ok) { const e = await r4.json().catch(() => ({})); throw new Error(`[에이전트 4] 재무 분석 실패: ${e?.error || r4.statusText}`); }
     const financeContent = (await r4.json()).response as string;
     onAgentComplete(4, `"${idea.name}" 재무·리스크 분석 완료`);
     updateEta(1 * agentEtaMs);
@@ -961,10 +1045,10 @@ function WorkflowPageInner() {
     try {
       // 프롬프트 크기 제한: combined가 너무 크면 앞부분만 전달
       const cappedPlan = combined.length > 40000 ? combined.slice(0, 40000) + '\n\n...(이하 생략)' : combined;
-      const r5 = await fetch('/api/generate', {
+      const r5 = await fetchWithTimeout('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: existingCtx }),
       });
       if (!r5.ok) {
         const errBody = await r5.json().catch(() => ({}));
@@ -1184,133 +1268,6 @@ function WorkflowPageInner() {
     setTimeout(() => setPrdCopied(false), 2000);
   }
 
-  // ── 기획서 Import ─────────────────────────────────────────────────
-  async function handleImportPlan(content: string) {
-    if (!content.trim()) {
-      setError('기획서 내용이 비어있습니다.');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setStep('importing-plan');
-    setLoadingMessage('기획서에서 핵심 정보를 추출하는 중...');
-    setProgressCurrent(0);
-    setProgressTotal(1);
-    setCompletedSteps([]);
-    startTimer(15000);
-
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          model: selectedModels[selectedProvider],
-          type: 'extract-idea',
-          planContent: content,
-        }),
-      });
-
-      if (!res.ok) throw new Error('기획서 분석 실패');
-      const data = await res.json();
-      const response = data.response as string;
-
-      // JSON 파싱 (여러 패턴 시도)
-      let extracted: Record<string, unknown> | null = null;
-      const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonBlockMatch) {
-        try { extracted = JSON.parse(jsonBlockMatch[1]); } catch { /* ignore */ }
-      }
-      if (!extracted) {
-        const rawMatch = response.match(/\{[\s\S]*"name"[\s\S]*\}/);
-        if (rawMatch) {
-          try { extracted = JSON.parse(rawMatch[0]); } catch { /* ignore */ }
-        }
-      }
-      if (!extracted) {
-        try { extracted = JSON.parse(response); } catch { /* ignore */ }
-      }
-
-      const syntheticIdea: Idea = {
-        id: -1,
-        name: (extracted?.name as string) || '가져온 기획서',
-        category: (extracted?.category as string) || '미분류',
-        oneLiner: (extracted?.oneLiner as string) || '',
-        target: (extracted?.target as string) || '',
-        problem: (extracted?.problem as string) || '',
-        features: (extracted?.features as string[]) || [],
-        differentiation: (extracted?.differentiation as string) || '',
-        revenueModel: (extracted?.revenueModel as string) || '',
-        mvpDifficulty: (extracted?.mvpDifficulty as string) || '중',
-        rationale: (extracted?.rationale as string) || '',
-      };
-
-      const syntheticPlan: BusinessPlan = {
-        ideaId: -1,
-        ideaName: syntheticIdea.name,
-        content,
-        createdAt: new Date().toISOString(),
-        version: 'draft',
-      };
-
-      setImportedPlanContent(content);
-      setIdeas([syntheticIdea]);
-      setSelectedIdeas([-1]);
-      setBusinessPlans([syntheticPlan]);
-      setCurrentPlanIndex(0);
-      setProgressCurrent(1);
-      setCompletedSteps(['기획서 분석 완료']);
-      setStep('view-plan');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setStep('keyword');
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-      stopTimer();
-    }
-  }
-
-  async function processImportFile(file: File) {
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['md', 'txt', 'docx'].includes(ext || '')) {
-      setError('.md, .txt 또는 .docx 파일만 지원합니다.');
-      return;
-    }
-
-    if (ext === 'docx') {
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('/api/parse-docx', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error('DOCX 파싱 실패');
-        const data = await res.json();
-        handleImportPlan(data.text);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'DOCX 파일 읽기 실패');
-      }
-      return;
-    }
-
-    const text = await file.text();
-    handleImportPlan(text);
-  }
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    processImportFile(file);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    processImportFile(file);
-  }
-
   function reset() {
     stopTimer();
     setStep('keyword');
@@ -1326,8 +1283,6 @@ function WorkflowPageInner() {
     setError(null);
     setRawResponse('');
     setImportedPlanContent(null);
-    setImportMode(null);
-    setPasteText('');
   }
 
   const C = CANYON;
@@ -1391,13 +1346,12 @@ function WorkflowPageInner() {
               // 로딩 중인 스텝은 도달 예정 단계로 매핑
               const effectiveStep =
                 step === 'generating-ideas' ? 'select-ideas' :
-                step === 'importing-plan' ? 'view-plan' :
                 step === 'generating-plan' ? 'view-plan' :
                 step === 'generating-full-plan' ? 'view-full-plan' :
                 step === 'generating-prd' ? 'view-prd' : step;
               const currentIdx = stepOrder.indexOf(effectiveStep);
               const isActive = idx <= currentIdx;
-              const isLoading = step.startsWith('generating') || step === 'importing-plan';
+              const isLoading = step.startsWith('generating');
               // 클릭 가능 조건: 이미 지나온 단계 + 로딩 중이 아님 + 데이터 존재
               const canNavigate = !isLoading && idx <= currentIdx && (
                 idx === 0 ||
@@ -1528,207 +1482,41 @@ function WorkflowPageInner() {
               </div>
             </div>
 
-            {/* ── 시작 방법 선택 탭 ──────────────────────────────── */}
-            <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ backgroundColor: '#F0D5C0' }}>
+            <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
+              서비스 아이템을 브레인스토밍해보려고 합니다
+            </h2>
+            <p className="mb-6 text-sm" style={{ color: C.textMid }}>
+              특별히 원하는 키워드가 있으면 넣어주세요. (옵션 — 비워두면 AI가 자동 선정)
+            </p>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && isProviderReady()) generateIdeas(); }}
+              placeholder="예: AI, 헬스케어, 교육, 생산성..."
+              className="w-full px-4 py-3 rounded-xl outline-none transition"
+              style={{
+                border: `1.5px solid ${C.border}`,
+                backgroundColor: '#fff',
+                color: C.textDark,
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+            />
+            <div className="mt-6 flex justify-end">
               <button
-                onClick={() => setImportMode(null)}
-                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
-                style={importMode === null
-                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                  : { color: C.textMid }
-                }
+                onClick={generateIdeas}
+                disabled={!isProviderReady()}
+                className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`,
+                  color: '#fff',
+                  boxShadow: `0 4px 16px rgba(194,75,37,0.3)`,
+                }}
               >
-                키워드로 아이디어 발굴
-              </button>
-              <button
-                onClick={() => setImportMode('file')}
-                className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
-                style={importMode !== null
-                  ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                  : { color: C.textMid }
-                }
-              >
-                기존 기획서 가져오기
+                아이디어 발굴 시작 →
               </button>
             </div>
-
-            {/* ── 키워드 입력 모드 ──────────────────────────────── */}
-            {importMode === null && (
-              <>
-                <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
-                  서비스 아이템을 브레인스토밍해보려고 합니다
-                </h2>
-                <p className="mb-6 text-sm" style={{ color: C.textMid }}>
-                  특별히 원하는 키워드가 있으면 넣어주세요. (옵션 — 비워두면 AI가 자동 선정)
-                </p>
-                <input
-                  type="text"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && isProviderReady()) generateIdeas(); }}
-                  placeholder="예: AI, 헬스케어, 교육, 생산성..."
-                  className="w-full px-4 py-3 rounded-xl outline-none transition"
-                  style={{
-                    border: `1.5px solid ${C.border}`,
-                    backgroundColor: '#fff',
-                    color: C.textDark,
-                  }}
-                  onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
-                  onBlur={e => (e.currentTarget.style.borderColor = C.border)}
-                />
-                <div className="mt-6 flex justify-end">
-                  <button
-                    onClick={generateIdeas}
-                    disabled={!isProviderReady()}
-                    className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{
-                      background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`,
-                      color: '#fff',
-                      boxShadow: `0 4px 16px rgba(194,75,37,0.3)`,
-                    }}
-                  >
-                    아이디어 발굴 시작 →
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ── 기획서 Import 모드 ──────────────────────────────── */}
-            {importMode !== null && (
-              <>
-                <h2 className="text-xl font-semibold mb-2" style={{ color: C.textDark }}>
-                  기존 사업기획서 가져오기
-                </h2>
-                <p className="mb-6 text-sm" style={{ color: C.textMid }}>
-                  기존 기획서를 가져오면 AI가 심화 분석하거나, 바로 PRD를 생성할 수 있습니다.
-                </p>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".md,.txt,.docx"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => { setImportMode('file'); fileInputRef.current?.click(); }}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
-                    style={importMode === 'file'
-                      ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
-                      : { border: `1.5px solid ${C.border}`, color: C.textMid }
-                    }
-                  >
-                    파일 업로드 (.md, .txt, .docx)
-                  </button>
-                  <button
-                    onClick={() => setImportMode('paste')}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
-                    style={importMode === 'paste'
-                      ? { backgroundColor: C.selectedBg, color: C.accent, border: `1.5px solid ${C.accent}` }
-                      : { border: `1.5px solid ${C.border}`, color: C.textMid }
-                    }
-                  >
-                    텍스트 붙여넣기
-                  </button>
-                </div>
-
-                {importMode === 'file' && (
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-8 rounded-xl text-center cursor-pointer transition"
-                    style={{
-                      border: `1.5px dashed ${isDragging ? C.accent : C.border}`,
-                      backgroundColor: isDragging ? C.selectedBg : '#fff',
-                    }}
-                  >
-                    <svg className="w-10 h-10 mx-auto mb-3" style={{ color: isDragging ? C.accent : C.textLight }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <p className="text-sm mb-1" style={{ color: isDragging ? C.accent : C.textMid }}>
-                      {isDragging ? '여기에 놓으세요' : '파일을 드래그하여 놓거나 클릭하여 선택'}
-                    </p>
-                    <p className="text-xs" style={{ color: C.textLight }}>.md, .txt, .docx 지원</p>
-                  </div>
-                )}
-
-                {importMode === 'paste' && (
-                  <div>
-                    <textarea
-                      value={pasteText}
-                      onChange={(e) => setPasteText(e.target.value)}
-                      placeholder="사업기획서 내용을 여기에 붙여넣으세요..."
-                      className="w-full px-4 py-3 rounded-xl outline-none text-sm resize-y"
-                      style={{
-                        border: `1.5px solid ${C.border}`,
-                        minHeight: '180px',
-                        color: C.textDark,
-                        backgroundColor: '#fff',
-                      }}
-                      onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
-                      onBlur={e => (e.currentTarget.style.borderColor = C.border)}
-                    />
-                    <div className="flex justify-end mt-4">
-                      <button
-                        onClick={() => handleImportPlan(pasteText)}
-                        disabled={!pasteText.trim() || !isProviderReady()}
-                        className="px-7 py-3 rounded-xl font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
-                        style={{ background: `linear-gradient(135deg, ${C.accent}, ${C.amber})`, color: '#fff', boxShadow: `0 4px 16px rgba(194,75,37,0.3)` }}
-                      >
-                        기획서 분석 시작 →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Step: Importing Plan */}
-        {step === 'importing-plan' && (
-          <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
-            <h2 className="text-xl font-semibold mb-5" style={{ color: C.textDark }}>기획서 분석 중</h2>
-            <div className="flex gap-8 mb-5">
-              <div>
-                <div className="text-xs mb-0.5" style={{ color: C.textLight }}>경과 시간</div>
-                <div className="font-mono text-base font-semibold" style={{ color: C.textDark }}>{formatTime(elapsedSeconds)}</div>
-              </div>
-              {etaSeconds !== null && (
-                <div>
-                  <div className="text-xs mb-0.5" style={{ color: C.textLight }}>예상 완료</div>
-                  <div className="font-mono text-base font-semibold" style={{ color: C.amber }}>
-                    {etaSeconds > 0 ? `약 ${formatTime(etaSeconds)} 후` : '거의 완료...'}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="mb-1 flex justify-between items-center text-sm">
-              <span style={{ color: C.textMid }}>{progressCurrent} / {progressTotal}단계 완료</span>
-              <span className="font-semibold" style={{ color: C.amber }}>{Math.round((progressCurrent / progressTotal) * 100)}%</span>
-            </div>
-            <div className="w-full rounded-full h-2 mb-6" style={{ backgroundColor: '#F0D5C0' }}>
-              <div className="h-2 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${Math.round((progressCurrent / progressTotal) * 100)}%`, background: `linear-gradient(90deg, ${C.accent}, ${C.amber})` }} />
-            </div>
-            <div className="space-y-2 mb-4">
-              {completedSteps.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm" style={{ color: C.textMid }}>
-                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  {msg}
-                </div>
-              ))}
-            </div>
-            {progressCurrent < progressTotal && (
-              <div className="flex items-center gap-2 text-sm" style={{ color: C.accent }}>
-                <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full flex-shrink-0" style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
-                {loadingMessage}
-              </div>
-            )}
           </div>
         )}
 
@@ -2328,14 +2116,25 @@ function WorkflowPageInner() {
             <h3 className="text-base font-semibold mb-5" style={{ color: C.textDark }}>
               {pendingFileFormat === 'md' ? '마크다운(.md)으로 저장' : '워드(.docx) 파일로 저장'}
             </h3>
+            {/* 저장 폴더 */}
+            <div className="mb-4">
+              <div className="text-xs mb-1" style={{ color: C.textLight }}>저장 폴더</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: saveDirHandle ? '#E8F5E9' : '#f5f5f5', color: saveDirHandle ? C.textDark : C.textLight }}>
+                  {saveDirHandle ? `/${saveDirName}` : '폴더를 선택하세요'}
+                </div>
+                {typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function' && (
+                  <button onClick={pickSaveFolder} className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
+                    {saveDirHandle ? '변경' : '폴더 선택'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* 파일명 */}
             <div className="mb-5">
-              <div className="text-xs mb-1" style={{ color: C.textLight }}>파일명</div>
-              <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
-                {(() => {
-                  const prefix = pendingPlanType === 'prd' ? 'PRD' : pendingPlan.version === 'full' ? '사업기획서_Full' : '사업기획서';
-                  const base = keyword ? `${prefix}_${keyword}_${pendingPlan.ideaName}` : `${prefix}_${pendingPlan.ideaName}`;
-                  return `${base}.${pendingFileFormat}`;
-                })()}
+              <div className="text-xs mb-1" style={{ color: C.textLight }}>파일명{saveDirHandle ? ' (중복 자동 확인)' : ''}</div>
+              <div className="text-sm px-3 py-2 rounded-lg break-all" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
+                {resolvedFileName}
               </div>
             </div>
             <div className="flex justify-end gap-3">

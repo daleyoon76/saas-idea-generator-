@@ -348,4 +348,117 @@ describe('Guided Page Integration', () => {
     const nextBtn = screen.getByRole('button', { name: /다음/i });
     expect(nextBtn).not.toBeDisabled();
   });
+
+  // ── Import 기능 테스트 ──────────────────────────────────
+  it('shows tab for wizard vs import modes', () => {
+    render(<GuidedPage />);
+
+    expect(screen.getByText('직접 입력')).toBeInTheDocument();
+    expect(screen.getByText('기존 기획서 가져오기')).toBeInTheDocument();
+  });
+
+  it('can switch to import tab and shows paste option', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+
+    await waitFor(() => {
+      expect(screen.getByText('기존 사업기획서 가져오기')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/파일 업로드/i)).toBeInTheDocument();
+    expect(screen.getByText('텍스트 붙여넣기')).toBeInTheDocument();
+  });
+
+  it('shows paste textarea when paste button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+    await user.click(screen.getByText('텍스트 붙여넣기'));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/기획서 분석 시작/i)).toBeInTheDocument();
+  });
+
+  it('shows drag zone when in file import mode', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/파일을 드래그하여 놓거나 클릭하여 선택/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/.md, .txt, .docx 지원/i)).toBeInTheDocument();
+  });
+
+  it('can switch back to wizard mode from import', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+    expect(screen.getByText('기존 사업기획서 가져오기')).toBeInTheDocument();
+
+    await user.click(screen.getByText('직접 입력'));
+    expect(screen.getByText(/어떤 서비스를 만들고 싶으신가요/i)).toBeInTheDocument();
+  });
+
+  it('import paste: analyze button is disabled when no text', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+    await user.click(screen.getByText('텍스트 붙여넣기'));
+
+    const analyzeBtn = screen.getByRole('button', { name: /기획서 분석 시작/i });
+    expect(analyzeBtn).toBeDisabled();
+  });
+
+  it('import paste: analyze button enables with text and provider', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+    await user.click(screen.getByText('텍스트 붙여넣기'));
+
+    const textarea = screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i);
+    await user.type(textarea, '# 테스트 기획서');
+
+    const analyzeBtn = screen.getByRole('button', { name: /기획서 분석 시작/i });
+    expect(analyzeBtn).not.toBeDisabled();
+  });
+
+  it('import paste: triggers extract-idea API', async () => {
+    const user = userEvent.setup();
+    render(<GuidedPage />);
+
+    await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
+
+    await user.click(screen.getByText('기존 기획서 가져오기'));
+    await user.click(screen.getByText('텍스트 붙여넣기'));
+
+    const textarea = screen.getByPlaceholderText(/사업기획서 내용을 여기에 붙여넣으세요/i);
+    await user.type(textarea, '# 기존 사업기획서\n\n## 핵심요약\n테스트 기획서입니다.');
+
+    await user.click(screen.getByRole('button', { name: /기획서 분석 시작/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/generate'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('extract-idea'),
+        }),
+      );
+    }, { timeout: 5000 });
+  }, 15000);
 });
