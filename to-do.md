@@ -55,6 +55,7 @@
 - [x] 마크다운 렌더링 (ReactMarkdown + remarkGfm)
 - [x] 아이디어 선택 → 사업기획서 복수 탭
 - [x] 색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합
+- [x] 랜딩 페이지 메시지 리포지셔닝 — "아이디어 발굴" → "기획서 작성" 중심으로 Hero·Steps·Features·CTA 카피 전면 변경
 
 ### 사업기획서 생성 (추가)
 - [x] Agent 5: Devil's Advocate — 섹션 14(현실 검증 + MVP 추천 + 주의점) 생성
