@@ -26,7 +26,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SaaS Idea Generator — AI 사업기획서 자동 생성",
+  title: "My CSO — AI 사업기획서 자동 작성",
   description: "키워드 입력 하나로 시장 조사부터 13섹션 사업기획서까지. 4개의 전문 AI 에이전트가 자동 완성합니다.",
 };
 

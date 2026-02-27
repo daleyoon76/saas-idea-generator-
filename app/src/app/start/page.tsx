@@ -11,7 +11,7 @@ export default function StartPage() {
       {/* 네비게이션 */}
       <nav className="w-full px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
         <Link href="/" className="text-lg font-bold" style={{ color: C.textDark }}>
-          SaaS Idea Generator
+          My CSO
         </Link>
       </nav>
 
@@ -81,7 +81,7 @@ export default function StartPage() {
                 </div>
 
                 <h2 className="text-lg font-bold mb-2" style={{ color: C.textDark }}>
-                  아이템 발굴부터
+                  아직 아이디어가 없다면
                 </h2>
                 <p className="text-sm leading-relaxed" style={{ color: C.textMid }}>
                   AI가 시장을 조사하고 유망한 아이디어 3개를 제안합니다.

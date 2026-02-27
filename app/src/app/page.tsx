@@ -5,24 +5,6 @@ const features = [
   {
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-      </svg>
-    ),
-    title: "4-채널 시장 조사",
-    description: "Tavily 검색 + Reddit 페인포인트 + Google Trends 급등 키워드 + Product Hunt 트렌딩 제품을 동시 수집해 풍부한 컨텍스트를 구성합니다.",
-  },
-  {
-    icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
-      </svg>
-    ),
-    title: "AI 아이디어 발굴",
-    description: "수집된 시장 데이터와 R10 기준을 바탕으로 유망한 SaaS/Agent 아이디어 3개를 자동 도출합니다.",
-  },
-  {
-    icon: (
-      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
       </svg>
     ),
@@ -32,11 +14,11 @@ const features = [
   {
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
       </svg>
     ),
-    title: "PRD 자동 생성",
-    description: "사업기획서를 바탕으로 개발팀용 PRD(제품 요구사항 문서)를 즉시 생성. 마크다운 또는 AI 친화적 형식으로 복사 가능합니다.",
+    title: "실시간 시장 조사",
+    description: "기획서 품질을 높이기 위해 Tavily 검색 + Reddit 페인포인트 + Google Trends + Product Hunt 데이터를 자동 수집합니다.",
   },
   {
     icon: (
@@ -56,28 +38,46 @@ const features = [
     title: ".md / .docx 저장",
     description: "완성된 사업기획서와 PRD를 마크다운 또는 워드(.docx) 파일로 즉시 다운로드. 폴더 선택 저장도 지원합니다.",
   },
+  {
+    icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+      </svg>
+    ),
+    title: "AI 아이디어 발굴",
+    description: "아이디어가 없을 때도 괜찮습니다. AI가 시장 데이터를 분석해 유망한 SaaS/Agent 아이디어 3개를 자동 도출합니다.",
+  },
+  {
+    icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+      </svg>
+    ),
+    title: "PRD 자동 생성",
+    description: "개발 단계로 바로 넘어가고 싶다면, 사업기획서를 바탕으로 개발팀용 PRD를 즉시 생성할 수 있습니다.",
+  },
 ];
 
 const steps = [
   {
     num: "01",
-    title: "키워드 입력",
-    desc: "탐색할 분야 키워드를 입력하세요. 비워두면 AI가 유망 분야를 자동 선정합니다.",
+    title: "아이디어 입력",
+    desc: "만들고 싶은 서비스를 간단히 설명하세요. 몇 가지 질문으로 구체화합니다.",
   },
   {
     num: "02",
-    title: "아이디어 발굴",
-    desc: "AI가 4개 채널에서 시장 신호를 수집하고 SaaS 아이디어 3개를 도출합니다.",
+    title: "시장 조사",
+    desc: "AI가 관련 시장과 경쟁 현황을 자동으로 리서치합니다.",
   },
   {
     num: "03",
-    title: "아이디어 선택",
-    desc: "상세 사업기획서를 작성할 아이디어를 하나 이상 선택하세요.",
+    title: "기획서 작성",
+    desc: "4개의 전문 에이전트가 13섹션 사업기획서를 순차 작성합니다.",
   },
   {
     num: "04",
-    title: "기획서 완성",
-    desc: "에이전트 팀이 13섹션 사업기획서와 PRD를 자동으로 완성합니다.",
+    title: "다운로드",
+    desc: "완성된 기획서를 마크다운 또는 워드(.docx) 파일로 저장하세요.",
   },
 ];
 
@@ -132,7 +132,7 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
             </div>
-            <span className="text-white font-semibold text-base tracking-tight">SaaS Idea Generator</span>
+            <span className="text-white font-semibold text-base tracking-tight">My CSO</span>
           </div>
           <Link
             href="/start"
@@ -163,20 +163,20 @@ export default function Home() {
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold leading-[1.15] tracking-tight mb-6" style={{ color: CANYON.cream }}>
-            AI가 발굴하는<br />
+            당신의 아이디어를<br />
             <span
               className="bg-clip-text text-transparent"
               style={{
                 backgroundImage: `linear-gradient(90deg, ${CANYON.amberLight} 0%, ${CANYON.amber} 40%, ${CANYON.cream} 100%)`,
               }}
             >
-              유망 SaaS 아이디어
+              사업기획서로 완성합니다
             </span>
           </h1>
 
           <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(240, 192, 160, 0.75)" }}>
-            키워드 하나면 충분합니다.<br className="hidden md:block" />
-            시장 조사부터 13섹션 사업기획서까지, AI 에이전트 팀이 자동 완성합니다.
+            아이디어만 알려주세요.<br className="hidden md:block" />
+            AI 에이전트 팀이 시장 조사부터 13섹션 사업기획서까지 자동으로 작성합니다.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -194,7 +194,7 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
             </Link>
-            <span className="text-sm" style={{ color: "rgba(240, 192, 160, 0.45)" }}>키워드 없이도 바로 시작 가능</span>
+            <span className="text-sm" style={{ color: "rgba(240, 192, 160, 0.45)" }}>아이디어가 없어도 AI가 발굴해드립니다</span>
           </div>
         </div>
       </section>
@@ -203,7 +203,7 @@ export default function Home() {
       <section className="max-w-5xl mx-auto px-6 py-20">
         <div className="text-center mb-14">
           <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>어떻게 작동하나요?</h2>
-          <p style={{ color: CANYON.textMid }}>4단계로 아이디어 발굴부터 완성된 사업기획서까지</p>
+          <p style={{ color: CANYON.textMid }}>아이디어 하나로 완성된 사업기획서까지 4단계</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -243,7 +243,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>주요 기능</h2>
-            <p style={{ color: CANYON.textMid }}>시장 조사부터 PRD까지, 사업 기획의 전 과정을 자동화</p>
+            <p style={{ color: CANYON.textMid }}>AI 에이전트 팀이 전문가 수준의 사업기획서를 작성합니다</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -278,7 +278,7 @@ export default function Home() {
       <section className="py-20 text-center">
         <div className="max-w-2xl mx-auto px-6">
           <h2 className="text-3xl font-bold mb-3" style={{ color: CANYON.textDark }}>지금 바로 시작해보세요</h2>
-          <p className="mb-8" style={{ color: CANYON.textMid }}>키워드 입력 하나로 아이디어에서 사업기획서까지</p>
+          <p className="mb-8" style={{ color: CANYON.textMid }}>아이디어를 사업기획서로, 지금 바로 시작하세요</p>
           <Link
             href="/start"
             className="inline-flex items-center gap-2 px-8 py-4 font-semibold rounded-xl transition"
@@ -309,7 +309,7 @@ export default function Home() {
       {/* ── Footer ───────────────────────────────────────────────── */}
       <footer style={{ borderTop: `1px solid ${CANYON.border}` }} className="py-8">
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs" style={{ color: CANYON.textLight }}>
-          <span>SaaS Idea Generator</span>
+          <span>My CSO</span>
           <span>Powered by Ollama · Claude · Gemini · GPT-4o</span>
         </div>
       </footer>
