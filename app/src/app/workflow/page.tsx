@@ -43,6 +43,34 @@ import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, Gu
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
 
+function MermaidDiagram({ chart }: { chart: string }) {
+  const mermaidRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState<string>('');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('mermaid').then((m) => {
+      m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
+        primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
+        lineColor: '#8B3520', textColor: '#3D1E10',
+      }});
+      const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+      m.default.render(id, chart)
+        .then(({ svg: renderedSvg }) => { if (!cancelled) setSvg(renderedSvg); })
+        .catch(() => { if (!cancelled) setError(true); });
+    });
+    return () => { cancelled = true; };
+  }, [chart]);
+
+  if (error) {
+    return <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5"
+      style={{ backgroundColor: '#F5EDE6', color: '#3D1008', fontFamily: 'var(--font-mono), monospace' }}>{chart}</pre>;
+  }
+  return <div className="my-4 overflow-x-auto flex justify-center"
+    dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 function WorkflowPageInner() {
   const searchParams = useSearchParams();
   const routerNav = useRouter();
@@ -1240,11 +1268,86 @@ function WorkflowPageInner() {
     return sanitizeMarkdown(combined);
   }
 
-  /** 마크다운 표·코드블록 앞뒤에 빈 줄 보장 (파서 깨짐 방지) */
+  /** 줄이 ASCII art 다이어그램의 일부인지 판별 */
+  function isDiagramLine(line: string): boolean {
+    // Box drawing characters (강한 신호)
+    if (/[│─┌┐└┘├┤┬┴┼╔╗╚╝║═┃━┏┓┗┛╭╮╯╰]/.test(line)) return true;
+    // 화살표 + 넓은 공백 조합 (포지셔닝 다이어그램)
+    if (/[→←↑↓▲▼●○◆]/.test(line) && /\s{3,}/.test(line)) return true;
+    return false;
+  }
+
+  /** ASCII art 다이어그램을 코드 펜스로 감싸서 모노스페이스 렌더링 */
+  function wrapDiagramBlocks(md: string): string {
+    // 이미 코드 펜스 안에 있는 부분은 건드리지 않음
+    const parts = md.split(/(```[\s\S]*?```)/);
+
+    return parts.map((part, idx) => {
+      if (idx % 2 === 1) return part; // 코드 블록 내용은 그대로
+
+      const lines = part.split('\n');
+      const output: string[] = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        if (isDiagramLine(lines[i])) {
+          const block: string[] = [];
+          let lastDiagramIdx = 0;
+
+          // 다이어그램 블록 수집 (다이어그램 줄 + 사이의 라벨/빈줄)
+          while (i < lines.length) {
+            if (isDiagramLine(lines[i])) {
+              lastDiagramIdx = block.length;
+              block.push(lines[i]);
+              i++;
+            } else if (
+              (lines[i].trim() === '' || (lines[i].trim().length < 50 && !lines[i].startsWith('#') && !/^\|.+\|$/.test(lines[i].trim()))) &&
+              block.length - lastDiagramIdx < 3
+            ) {
+              block.push(lines[i]);
+              i++;
+            } else {
+              break;
+            }
+          }
+
+          // 끝부분의 빈 줄 제거
+          while (block.length > 0 && block[block.length - 1].trim() === '') {
+            block.pop();
+            i--;
+          }
+
+          // 다이어그램 줄이 2개 이상이면 코드 펜스로 감싸기
+          const diagramCount = block.filter(l => isDiagramLine(l)).length;
+          if (diagramCount >= 2) {
+            output.push('', '```', ...block, '```', '');
+          } else {
+            output.push(...block);
+          }
+        } else {
+          output.push(lines[i]);
+          i++;
+        }
+      }
+
+      return output.join('\n');
+    }).join('');
+  }
+
+  /** 마크다운 표·코드블록 앞뒤에 빈 줄 보장 + 다이어그램 코드펜스 래핑 */
   function sanitizeMarkdown(md: string): string {
-    return md
-      // 표 앞뒤에 빈 줄 보장: |로 시작하는 줄 블록 앞뒤
-      .replace(/([^\n])\n(\|[^\n]+\|)/g, '$1\n\n$2')
+    // 1. 표 행 사이의 빈 줄 제거: |로 시작하는 연속 행들 사이의 공백 줄을 제거
+    let result = md;
+    while (/(\|[^\n]+\|)\n\n+(\|)/.test(result)) {
+      result = result.replace(/(\|[^\n]+\|)\n\n+(\|)/g, '$1\n$2');
+    }
+    // 2. ASCII art 다이어그램을 코드 펜스로 감싸기
+    result = wrapDiagramBlocks(result);
+
+    return result
+      // 3. 표 블록 앞에 빈 줄 보장 (이전 줄이 | 로 끝나지 않는 경우만 — 테이블 행 사이는 건드리지 않음)
+      .replace(/([^\n|])\n(\|[^\n]+\|)/g, '$1\n\n$2')
+      // 4. 표 블록 뒤에 빈 줄 보장 (다음 줄이 | 로 시작하지 않는 경우만)
       .replace(/(\|[^\n]+\|)\n([^\n|])/g, '$1\n\n$2')
       // 코드블록 앞뒤에 빈 줄 보장
       .replace(/([^\n])\n(```)/g, '$1\n\n$2')
@@ -1322,7 +1425,7 @@ function WorkflowPageInner() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
             </div>
-            <span className="font-semibold text-sm" style={{ color: C.textDark }}>SaaS Idea Generator</span>
+            <span className="font-semibold text-sm" style={{ color: C.textDark }}>My CSO</span>
           </div>
           {/* Provider 상태 */}
           <div className="text-xs">
@@ -1802,9 +1905,16 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
+                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
+                      if (/language-mermaid/.test(className || '')) {
+                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+                      }
+                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
+                    },
                   }}
                 >
-                  {businessPlans[currentPlanIndex].content}
+                  {sanitizeMarkdown(businessPlans[currentPlanIndex].content)}
                 </ReactMarkdown>
               </div>
 
@@ -1997,9 +2107,16 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
+                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
+                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
+                      if (/language-mermaid/.test(className || '')) {
+                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+                      }
+                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
+                    },
                   }}
                 >
-                  {fullBusinessPlans[currentFullPlanIndex].content}
+                  {sanitizeMarkdown(fullBusinessPlans[currentFullPlanIndex].content)}
                 </ReactMarkdown>
               </div>
 
@@ -2096,7 +2213,14 @@ function WorkflowPageInner() {
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
-                  }}>{prds[currentPRDIndex].content}</ReactMarkdown>
+                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
+                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
+                      if (/language-mermaid/.test(className || '')) {
+                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+                      }
+                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
+                    },
+                  }}>{sanitizeMarkdown(prds[currentPRDIndex].content)}</ReactMarkdown>
                 )}
               </div>
 

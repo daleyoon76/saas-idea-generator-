@@ -242,7 +242,8 @@ export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: S
 - Bullet point 중심, 항목별 명사형 마무리
 - 수치·통계에는 [1], [2] 형태 각주 필수
 - 검색 자료 없으면 "~로 추정" 또는 "업계 추정치"로 명시
-- 가상 기업명·수치 생성 금지`;
+- 가상 기업명·수치 생성 금지
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
@@ -285,7 +286,8 @@ export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketConten
 작성 원칙:
 - Bullet point 중심, 항목별 명사형 마무리
 - 비교표, 차별화 도표 등 Markdown 표 형식 적극 활용
-- 가상 기업명 생성 금지`;
+- 가상 기업명 생성 금지
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
@@ -336,7 +338,8 @@ export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: 
 작성 원칙:
 - Bullet point 중심, 항목별 명사형 마무리
 - 로드맵은 단계별 구조로 명확하게
-- 구체적이고 실행 가능한 수준으로 작성`;
+- 구체적이고 실행 가능한 수준으로 작성
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
@@ -411,7 +414,8 @@ export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: s
 - Bullet point 중심, 항목별 명사형 마무리
 - 수치·통계에는 [번호] 각주 필수
 - 출처 없는 수치는 "~로 추정" 또는 "업계 추정치"로 명시
-- 가상 기업명·수치 생성 금지`;
+- 가상 기업명·수치 생성 금지
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
@@ -472,7 +476,8 @@ export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: s
 - 낙관적 편향을 제거하고 냉정하게 검증
 - "~할 수 있다"보다 "~하려면 최소 X가 필요하다" 식의 구체적 조건 제시
 - Bullet point 중심, 항목별 명사형 마무리
-- 핵심 리스크 요약(RISK_SUMMARY)은 3~5개 bullet, 각 1줄로 간결하게`;
+- 핵심 리스크 요약(RISK_SUMMARY)은 3~5개 bullet, 각 1줄로 간결하게
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
   return `한국어로만 답변하세요.
 ${buildSearchCtx(searchResults)}
@@ -549,6 +554,7 @@ ${searchContext}
 - 서술형 문장이 길게 이어지는 것을 지양
 - 통계·가정·수치에는 [1], [2] 형태의 각주를 붙이고, 문서 말미 참고문헌 표와 연결
 - 비교표, 차별화 도표 등 시각화 요소 적극 활용 (Markdown 표 형식)
+- 도표·다이어그램이 필요할 경우 ASCII art 대신 Mermaid 문법을 사용하세요 (\`\`\`mermaid 코드 블록). 예: quadrantChart(포지셔닝), flowchart(프로세스), pie(비율), xychart-beta(추이). 표 데이터는 기존처럼 Markdown 표를 사용하세요.
 
 **섹션별 필수 요건:**
 - 경쟁 분석: 실제 경쟁사 최소 3개를 비교표로 제시
