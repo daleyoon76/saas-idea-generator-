@@ -64,6 +64,12 @@ function sanitizeMermaidSyntax(src: string): string {
     // trailing 빈 줄 정리
     .replace(/\n{3,}/g, '\n\n');
 
+  // 노드 라벨 안의 리터럴 \n → <br/> (Mermaid 줄바꿈)
+  // ["텍스트\n줄2"], ("텍스트\n줄2"), (["텍스트\n줄2"]) 등
+  result = result.replace(/([\["(\[{>])([^\]")\n}]*?\\n[^\]")\n}]*?)([\]")\]}])/g, (m, open, body, close) =>
+    `${open}${body.replace(/\\n/g, '<br/>')}${close}`
+  );
+
   return result;
 }
 
@@ -361,6 +367,7 @@ function WorkflowPageInner() {
   const processStartRef = useRef<number | null>(null);
   const expectedEndRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
@@ -426,6 +433,13 @@ function WorkflowPageInner() {
   function updateEta(remainingMs: number) {
     expectedEndRef.current = Date.now() + remainingMs;
     setEtaSeconds(Math.ceil(remainingMs / 1000));
+  }
+
+  function handleAbortGeneration() {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
   }
 
   async function checkProviders() {
@@ -744,11 +758,15 @@ function WorkflowPageInner() {
     const timings = getStoredTimings();
     startTimer(selectedIdeas.length * (timings.planSearch + timings.planLLM));
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const plans: BusinessPlan[] = [];
       let completedIdeas = 0;
 
       for (const ideaId of selectedIdeas) {
+        if (controller.signal.aborted) break;
         const idea = ideas.find((i) => i.id === ideaId);
         if (!idea) continue;
 
@@ -769,6 +787,7 @@ function WorkflowPageInner() {
         } catch (searchErr) {
           console.log('Search failed for business plan:', searchErr);
         }
+        if (controller.signal.aborted) break;
         updateStoredTiming('planSearch', Date.now() - planSearchStart);
         setProgressCurrent(prev => prev + 1);
         setCompletedSteps(prev => [...prev, `"${idea.name}" 시장 자료 ${planSearchResults.length}건 수집 완료`]);
@@ -789,6 +808,7 @@ function WorkflowPageInner() {
             idea,
             searchResults: planSearchResults,
           }),
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -813,6 +833,10 @@ function WorkflowPageInner() {
         updateEta((selectedIdeas.length - completedIdeas) * (timings.planSearch + timings.planLLM));
       }
 
+      if (controller.signal.aborted) {
+        setStep('select-ideas');
+        return;
+      }
       setBusinessPlans(plans);
       setCurrentPlanIndex(0);
       if (processStartRef.current) {
@@ -822,9 +846,14 @@ function WorkflowPageInner() {
       }
       setStep('view-plan');
     } catch (err) {
+      if (controller.signal.aborted) {
+        setStep('select-ideas');
+        return;
+      }
       { console.error('[오류]', err); setError(err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err) || '알 수 없는 오류'); }
       setStep('select-ideas');
     } finally {
+      abortRef.current = null;
       setIsLoading(false);
       setLoadingMessage('');
       stopTimer();
@@ -1277,7 +1306,7 @@ function WorkflowPageInner() {
   function stripRiskSummary(devilContent: string): string {
     return devilContent
       .replace(/<!-- RISK_SUMMARY -->[\s\S]*?<!-- \/RISK_SUMMARY -->\s*/, '')
-      .replace(/###\s*블록\s*\d[^:\n]*:[^\n]*\n*/g, '')
+      .replace(/#{2,3}\s*(?:블록|[Bb][Ll][Oo][Cc][Kk])\s*\d[^:\n]*:[^\n]*\n*/g, '')
       .trim();
   }
 
@@ -1334,20 +1363,30 @@ function WorkflowPageInner() {
 
   // ── 풀버전 생성 파이프라인 (검색 → Agent 1~4 → 조합) ──────────────────
 
-  // 타임아웃 래퍼: 에이전트 호출이 5분 넘으면 중단
-  async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 600000): Promise<Response> {
+  // 타임아웃 래퍼: 에이전트 호출이 5분 넘으면 중단. externalSignal이 있으면 외부 중지도 반영.
+  async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 600000, externalSignal?: AbortSignal): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // 외부 signal이 abort되면 내부 controller도 abort
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) { clearTimeout(timer); throw new DOMException('Aborted', 'AbortError'); }
+      externalSignal.addEventListener('abort', onExternalAbort);
+    }
     try {
       const res = await fetch(url, { ...opts, signal: controller.signal });
       return res;
     } catch (err: unknown) {
+      if (externalSignal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       if (controller.signal.aborted) {
         throw new Error(`AI 응답 시간 초과 (${Math.round(timeoutMs / 60000)}분). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
       }
       throw err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'fetch 실패');
     } finally {
       clearTimeout(timer);
+      if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
     }
   }
 
@@ -1382,7 +1421,7 @@ function WorkflowPageInner() {
     async function agentFetch(agentNum: number, agentLabel: string, payload: Record<string, unknown>): Promise<string> {
       const bodyStr = JSON.stringify(payload);
       console.log(`[에이전트 ${agentNum}] request body: ${Math.round(bodyStr.length / 1024)}KB`);
-      const r = await fetchWithTimeout('/api/generate', { method: 'POST', headers, body: bodyStr });
+      const r = await fetchWithTimeout('/api/generate', { method: 'POST', headers, body: bodyStr }, 600000, abortRef.current?.signal ?? undefined);
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(`[에이전트 ${agentNum}] ${agentLabel} 실패: ${e?.error || r.statusText}`); }
       const data = await r.json();
       const content = appendTruncationWarning(data.response as string, data.meta);
@@ -1425,7 +1464,7 @@ function WorkflowPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: existingCtx }),
-      });
+      }, 600000, abortRef.current?.signal ?? undefined);
       if (!r5.ok) {
         const errBody = await r5.json().catch(() => ({}));
         console.warn(`[Agent 5] Devil's Advocate 실패 (${r5.status}):`, errBody?.error || r5.statusText);
@@ -1484,6 +1523,9 @@ function WorkflowPageInner() {
     const agentEtaMs = 90000;
     startTimer(5 * agentEtaMs);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const newFullPlan = await runFullPlanPipeline(idea, (agentNum, label) => {
         setProgressCurrent(agentNum);
@@ -1496,11 +1538,16 @@ function WorkflowPageInner() {
       setCurrentFullPlanIndex(newPlans.length - 1);
       setStep('view-full-plan');
     } catch (err) {
+      if (controller.signal.aborted) {
+        setStep('view-plan');
+        return;
+      }
       console.error('[풀버전 생성 오류]', err);
       const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err);
       setError(msg || '알 수 없는 오류가 발생했습니다.');
       setStep('view-plan');
     } finally {
+      abortRef.current = null;
       setIsLoading(false);
       setLoadingMessage('');
       stopTimer();
@@ -1527,11 +1574,15 @@ function WorkflowPageInner() {
     const agentEtaMs = 90000;
     startTimer(totalAgents * agentEtaMs);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     let globalProgress = 0;
     const allNewPlans: BusinessPlan[] = [];
     const failedNames: string[] = [];
 
     for (const draft of targets) {
+      if (controller.signal.aborted) break;
       const idea = ideas.find((i) => i.id === draft.ideaId);
       if (!idea) continue;
 
@@ -1546,12 +1597,22 @@ function WorkflowPageInner() {
 
         allNewPlans.push(newFullPlan);
       } catch (err) {
+        if (controller.signal.aborted) break;
         // 개별 실패: 건너뛰고 다음으로 진행
         globalProgress = (allNewPlans.length + failedNames.length + 1) * 5;
         setProgressCurrent(globalProgress);
         failedNames.push(idea.name);
         setCompletedSteps(prev => [...prev, `"${idea.name}" 생성 실패 — ${err instanceof Error ? err.message : '알 수 없는 오류'}`]);
       }
+    }
+
+    if (controller.signal.aborted) {
+      abortRef.current = null;
+      setIsLoading(false);
+      setLoadingMessage('');
+      stopTimer();
+      setStep('view-plan');
+      return;
     }
 
     if (allNewPlans.length > 0) {
@@ -1565,6 +1626,7 @@ function WorkflowPageInner() {
       setStep('view-plan');
     }
 
+    abortRef.current = null;
     setIsLoading(false);
     setLoadingMessage('');
     stopTimer();
@@ -1704,6 +1766,34 @@ function WorkflowPageInner() {
     }).join('');
   }
 
+  /** 줄바꿈 없이 한 줄에 이어붙여진 마크다운 표를 복원 */
+  function fixBrokenTables(content: string): string {
+    return content.split('\n').map(line => {
+      // 200자 미만이거나 |---| 패턴이 없으면 정상 행
+      if (line.length < 200 || !line.includes('|---')) return line;
+
+      // 구분선에서 컬럼 수 추출: |---|---|---| → 3컬럼
+      const sepMatch = line.match(/\|(-{3,}\|)+/);
+      if (!sepMatch) return line;
+      const colCount = (sepMatch[0].match(/-{3,}/g) || []).length;
+      if (colCount < 2) return line;
+
+      // 파이프 위치를 수집해 (colCount+1)개씩 끊어 행 분리
+      const pipesPerRow = colCount + 1;
+      const pipePositions: number[] = [];
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '|') pipePositions.push(i);
+      }
+      if (pipePositions.length < pipesPerRow) return line;
+
+      const rows: string[] = [];
+      for (let i = 0; i + pipesPerRow - 1 < pipePositions.length; i += pipesPerRow) {
+        rows.push(line.slice(pipePositions[i], pipePositions[i + pipesPerRow - 1] + 1).trim());
+      }
+      return rows.length > 1 ? rows.join('\n') : line;
+    }).join('\n');
+  }
+
   /** 마크다운 표·코드블록 앞뒤에 빈 줄 보장 + 다이어그램 코드펜스 래핑 */
   function sanitizeMarkdown(md: string): string {
     // 0. 근본 정규화: CRLF→LF, 공백전용 줄→빈 줄, 테이블 행 trailing whitespace 제거
@@ -1711,6 +1801,8 @@ function WorkflowPageInner() {
       .replace(/\r\n/g, '\n')
       .replace(/^[ \t]+$/gm, '')
       .replace(/^(\|.*\|)[ \t]+$/gm, '$1');
+    // 0.5. 깨진 테이블 복원: 줄바꿈 없이 한 줄에 이어붙여진 표 행을 분리
+    result = fixBrokenTables(result);
     // 1. 표 행 사이의 빈 줄 제거: |로 시작하는 연속 행들 사이의 공백 줄을 제거
     while (/(\|[^\n]+\|)\n\n+(\|)/.test(result)) {
       result = result.replace(/(\|[^\n]+\|)\n\n+(\|)/g, '$1\n$2');
@@ -2197,6 +2289,15 @@ function WorkflowPageInner() {
                 {loadingMessage}
               </div>
             )}
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={handleAbortGeneration}
+                className="px-5 py-2 rounded-xl text-sm font-medium transition hover:opacity-80"
+                style={{ backgroundColor: C.cream, color: C.accent, border: `1px solid ${C.accent}` }}
+              >
+                작성중지
+              </button>
+            </div>
           </div>
         )}
 
@@ -2278,6 +2379,7 @@ function WorkflowPageInner() {
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
@@ -2422,6 +2524,15 @@ function WorkflowPageInner() {
                 {loadingMessage}
               </div>
             )}
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={handleAbortGeneration}
+                className="px-5 py-2 rounded-xl text-sm font-medium transition hover:opacity-80"
+                style={{ backgroundColor: C.cream, color: C.accent, border: `1px solid ${C.accent}` }}
+              >
+                작성중지
+              </button>
+            </div>
           </div>
         )}
 
@@ -2483,6 +2594,7 @@ function WorkflowPageInner() {
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
@@ -2592,6 +2704,7 @@ function WorkflowPageInner() {
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,

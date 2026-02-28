@@ -122,13 +122,12 @@ export async function POST(request: NextRequest) {
     } else if (type === 'generate-prd' && idea) {
       prompt = buildPRDPrompt(idea as Idea, body.businessPlanContent as string || '');
     } else if (type === 'extract-idea') {
-      const planContent = body.planContent as string;
-      if (!planContent || typeof planContent !== 'string') {
+      const rawPlanContent = body.planContent as string;
+      if (!rawPlanContent || typeof rawPlanContent !== 'string') {
         return NextResponse.json({ error: 'planContent must be a non-empty string' }, { status: 400 });
       }
-      if (planContent.length > 100000) {
-        return NextResponse.json({ error: 'planContent exceeds maximum length (100KB)' }, { status: 400 });
-      }
+      // 핵심 정보 추출용이므로 앞부분 50K만 사용 (큰 docx 대응)
+      const planContent = rawPlanContent.slice(0, 50000);
       prompt = createIdeaExtractionPrompt(planContent);
     } else if (type === 'full-plan-market' && idea) {
       const existingPlan = typeof body.existingPlanContent === 'string' ? body.existingPlanContent.slice(0, 50000) : undefined;

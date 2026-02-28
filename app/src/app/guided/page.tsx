@@ -268,7 +268,11 @@ export default function GuidedPage() {
         }),
       });
 
-      if (!res.ok) throw new Error('기획서 분석 실패');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        console.error('[extract-idea] 서버 응답:', res.status, errBody);
+        throw new Error(errBody?.error || '기획서 분석 실패');
+      }
       const data = await res.json();
       const response = data.response as string;
 
