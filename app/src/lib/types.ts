@@ -84,8 +84,10 @@ export type GuidedStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'generating' | 'complet
 export interface GuidedResult {
   idea: Idea;
   businessPlan: BusinessPlan;
-  provider: AIProvider;
-  model: string;
+  preset?: QualityPreset;
+  provider?: AIProvider;
+  model?: string;
+  importedPlanContent?: string;
 }
 
 export const GUIDED_RESULT_KEY = 'guided-result';
@@ -130,5 +132,60 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
       { id: 'gpt-4o',      label: 'GPT-4o',      description: '균형 (추천)', quality: 4, speed: 4, cost: 3 },
       { id: 'gpt-4.1',     label: 'GPT-4.1',     description: '최신',        quality: 5, speed: 4, cost: 2 },
     ],
+  },
+};
+
+// --- 프리셋 기반 멀티모델 라우팅 ---
+
+export type QualityPreset = 'standard' | 'premium';
+
+export interface PresetModelConfig {
+  provider: AIProvider;
+  model: string;
+}
+
+/**
+ * 모듈별 프리셋 → fallback chain.
+ * 서버에서 첫 번째 사용 가능한 provider(API 키 존재)를 자동 선택한다.
+ *
+ * Standard: 비용 효율 (GPT 중심, Gemini Flash 보조)
+ * Premium:  최고 품질 3자 혼합 (Claude 한국어 서술 + Gemini Pro 데이터 분석 + GPT-5 추론)
+ */
+export const MODULE_PRESETS: Record<QualityPreset, Record<string, PresetModelConfig[]>> = {
+  standard: {
+    'generate-ideas':        [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },     { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'business-plan':         [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-market':      [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'full-plan-competition': [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'full-plan-strategy':    [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-finance':     [{ provider: 'openai', model: 'gpt-4.1' },         { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-devil':       [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },         { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },    { provider: 'gemini', model: 'gemini-2.5-flash-lite' }, { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+  },
+  premium: {
+    'generate-ideas':        [{ provider: 'openai', model: 'gpt-5' },            { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'business-plan':         [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    'full-plan-market':      [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-competition': [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-strategy':    [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    'full-plan-finance':     [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-devil':       [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },          { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },     { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+  },
+};
+
+/** UI 표시용 프리셋 메타 정보 */
+export const PRESET_INFO: Record<QualityPreset, { label: string; description: string; detail: string }> = {
+  standard: {
+    label: '기본',
+    description: '비용 효율 최적화',
+    detail: 'GPT 중심 · Gemini Flash 보조',
+  },
+  premium: {
+    label: '고품질',
+    description: '최고 품질 한국어',
+    detail: 'Claude + Gemini Pro + GPT 혼합',
   },
 };

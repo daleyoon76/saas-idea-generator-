@@ -39,7 +39,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
-import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
+import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, QualityPreset, MODULE_PRESETS, PRESET_INFO, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
 
@@ -60,7 +60,9 @@ function WorkflowPageInner() {
   const [prdCopied, setPrdCopied] = useState(false);
   const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('ollama');
+  const [selectionMode, setSelectionMode] = useState<'preset' | 'manual'>('preset');
+  const [selectedPreset, setSelectedPreset] = useState<QualityPreset>('premium');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('claude');
   const [availableProviders, setAvailableProviders] = useState<Record<AIProvider, boolean | null>>({
     ollama: null,
     claude: null,
@@ -114,8 +116,15 @@ function WorkflowPageInner() {
           setSelectedIdeas([result.idea.id]);
           setBusinessPlans([result.businessPlan]);
           setCurrentPlanIndex(0);
-          setSelectedProvider(result.provider);
-          setSelectedModels(prev => ({ ...prev, [result.provider]: result.model }));
+          if (result.preset) {
+            setSelectionMode('preset');
+            setSelectedPreset(result.preset);
+          } else if (result.provider) {
+            setSelectionMode('manual');
+            setSelectedProvider(result.provider);
+            if (result.model) setSelectedModels(prev => ({ ...prev, [result.provider!]: result.model! }));
+          }
+          if (result.importedPlanContent) setImportedPlanContent(result.importedPlanContent);
           setStep('view-plan');
           sessionStorage.removeItem(GUIDED_RESULT_KEY);
         } catch (e) {
@@ -166,7 +175,30 @@ function WorkflowPageInner() {
   }
 
   function isProviderReady(): boolean {
-    return availableProviders[selectedProvider] === true;
+    if (selectionMode === 'manual') {
+      return availableProviders[selectedProvider] === true;
+    }
+    // 프리셋 모드: 모든 모듈에 대해 최소 1개 provider가 사용 가능하면 OK
+    const types = Object.keys(MODULE_PRESETS[selectedPreset]);
+    return types.every(type => {
+      const chain = MODULE_PRESETS[selectedPreset][type];
+      return chain.some(c => availableProviders[c.provider] === true);
+    });
+  }
+
+  function getModelPayload(): Record<string, string> {
+    if (selectionMode === 'manual') {
+      return { provider: selectedProvider, model: selectedModels[selectedProvider] };
+    }
+    return { preset: selectedPreset };
+  }
+
+  function getModelLabel(): string {
+    if (selectionMode === 'manual') {
+      const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(m => m.id === selectedModels[selectedProvider])?.label ?? selectedModels[selectedProvider];
+      return `${PROVIDER_CONFIGS[selectedProvider].label} ${modelLabel}`;
+    }
+    return `${PRESET_INFO[selectedPreset].label} 모드`;
   }
 
   async function searchMultiple(queries: string[], countEach: number = 4, depth: 'basic' | 'advanced' = 'basic'): Promise<SearchResult[]> {
@@ -288,8 +320,7 @@ function WorkflowPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: selectedProvider,
-          model: selectedModels[selectedProvider],
+          ...getModelPayload(),
           type: 'generate-ideas',
           keyword: keyword || undefined,
           searchResults: searchData,
@@ -438,8 +469,7 @@ function WorkflowPageInner() {
       setProgressCurrent(2);
       if (processStartRef.current) {
         const secs = Math.round((Date.now() - processStartRef.current) / 1000);
-        const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(m => m.id === selectedModels[selectedProvider])?.label ?? selectedModels[selectedProvider];
-        setLastGenTime({ seconds: secs, label: `${PROVIDER_CONFIGS[selectedProvider].label} ${modelLabel}` });
+        setLastGenTime({ seconds: secs, label: getModelLabel() });
       }
       setStep('select-ideas');
     } catch (err) {
@@ -505,8 +535,7 @@ function WorkflowPageInner() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            provider: selectedProvider,
-            model: selectedModels[selectedProvider],
+            ...getModelPayload(),
             type: 'business-plan',
             idea,
             searchResults: planSearchResults,
@@ -536,8 +565,7 @@ function WorkflowPageInner() {
       setCurrentPlanIndex(0);
       if (processStartRef.current) {
         const secs = Math.round((Date.now() - processStartRef.current) / 1000);
-        const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(m => m.id === selectedModels[selectedProvider])?.label ?? selectedModels[selectedProvider];
-        setLastGenTime({ seconds: secs, label: `${PROVIDER_CONFIGS[selectedProvider].label} ${modelLabel}` });
+        setLastGenTime({ seconds: secs, label: getModelLabel() });
       }
       setStep('view-plan');
     } catch (err) {
@@ -574,14 +602,11 @@ function WorkflowPageInner() {
     const children: any[] = [];
 
     // ── 문서 상단 메타 정보 ─────────────────────────────────────────
-    const modelLabel = PROVIDER_CONFIGS[selectedProvider].models.find(
-      m => m.id === selectedModels[selectedProvider]
-    )?.label ?? selectedModels[selectedProvider];
-    const providerLabel = PROVIDER_CONFIGS[selectedProvider].label;
+    const docModelLabel = getModelLabel();
     const createdAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
     children.push(new Paragraph({
       children: [
-        new TextRun({ text: `생성 모델: ${providerLabel} ${modelLabel}`, size: 18, color: DC.textLight }),
+        new TextRun({ text: `생성 모델: ${docModelLabel}`, size: 18, color: DC.textLight }),
         new TextRun({ text: `    |    생성 일시: ${createdAt}`, size: 18, color: DC.textLight }),
       ],
       spacing: { after: 40 },
@@ -826,8 +851,7 @@ function WorkflowPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: selectedProvider,
-          model: selectedModels[selectedProvider],
+          ...getModelPayload(),
           type: 'generate-prd',
           idea,
           businessPlanContent: currentPlan.content,
@@ -909,7 +933,7 @@ function WorkflowPageInner() {
     const r1 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+      body: JSON.stringify({ ...getModelPayload(), type: 'full-plan-market', idea, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r1.ok) throw new Error(`시장 분석 실패: ${idea.name}`);
     const marketContent = (await r1.json()).response as string;
@@ -921,7 +945,7 @@ function WorkflowPageInner() {
     const r2 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+      body: JSON.stringify({ ...getModelPayload(), type: 'full-plan-competition', idea, marketContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r2.ok) throw new Error(`경쟁 분석 실패: ${idea.name}`);
     const competitionContent = (await r2.json()).response as string;
@@ -933,7 +957,7 @@ function WorkflowPageInner() {
     const r3 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+      body: JSON.stringify({ ...getModelPayload(), type: 'full-plan-strategy', idea, marketContent, competitionContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r3.ok) throw new Error(`전략 수립 실패: ${idea.name}`);
     const strategyContent = (await r3.json()).response as string;
@@ -945,7 +969,7 @@ function WorkflowPageInner() {
     const r4 = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+      body: JSON.stringify({ ...getModelPayload(), type: 'full-plan-finance', idea, marketContent, competitionContent, strategyContent, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
     });
     if (!r4.ok) throw new Error(`재무 분석 실패: ${idea.name}`);
     const financeContent = (await r4.json()).response as string;
@@ -964,7 +988,7 @@ function WorkflowPageInner() {
       const r5 = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider, model: selectedModels[selectedProvider], type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
+        body: JSON.stringify({ ...getModelPayload(), type: 'full-plan-devil', idea, fullPlanContent: cappedPlan, searchResults: planSearchResults, existingPlanContent: importedPlanContent || draftContent || undefined }),
       });
       if (!r5.ok) {
         const errBody = await r5.json().catch(() => ({}));
@@ -1205,8 +1229,7 @@ function WorkflowPageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: selectedProvider,
-          model: selectedModels[selectedProvider],
+          ...getModelPayload(),
           type: 'extract-idea',
           planContent: content,
         }),
@@ -1364,17 +1387,17 @@ function WorkflowPageInner() {
           </div>
           {/* Provider 상태 */}
           <div className="text-xs">
-            {availableProviders[selectedProvider] === null ? (
+            {Object.values(availableProviders).some(v => v === null) ? (
               <span style={{ color: C.textLight }}>확인 중...</span>
-            ) : availableProviders[selectedProvider] ? (
+            ) : isProviderReady() ? (
               <span className="flex items-center gap-1" style={{ color: C.success }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                {PROVIDER_CONFIGS[selectedProvider].label}
+                {getModelLabel()}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-red-500">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                {PROVIDER_CONFIGS[selectedProvider].label} 미설정
+                API 키 미설정
               </span>
             )}
           </div>
@@ -1455,77 +1478,148 @@ function WorkflowPageInner() {
         {/* Step: Keyword Input */}
         {step === 'keyword' && (
           <div className="rounded-2xl p-8" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
-            {/* AI Model Selector */}
+            {/* AI 모드 선택 */}
             <div className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.textLight }}>
-                사용할 AI 모델 선택
+                AI 품질 모드 선택
               </h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {(Object.keys(PROVIDER_CONFIGS) as AIProvider[]).map((provider) => {
-                  const cfg = PROVIDER_CONFIGS[provider];
-                  const available = availableProviders[provider];
-                  const isSelected = selectedProvider === provider;
-                  // 현재 선택된 모델의 스펙
-                  const currentModel = cfg.models.find(m => m.id === selectedModels[provider]) ?? cfg.models[0];
-                  const dotRow = (score: number, color: string) =>
-                    Array.from({ length: 5 }, (_, i) => (
-                      <span key={i} style={{ color: i < score ? color : C.border, fontSize: 10 }}>●</span>
-                    ));
-                  return (
-                    <div
-                      key={provider}
-                      onClick={() => setSelectedProvider(provider)}
-                      className="relative p-3 rounded-xl text-left transition cursor-pointer"
-                      style={isSelected
-                        ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg }
-                        : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
-                      }
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-sm" style={{ color: C.textDark }}>{cfg.label}</div>
-                        {available === null ? (
-                          <span className="text-xs" style={{ color: C.textLight }}>…</span>
-                        ) : available ? (
-                          <span className="text-xs text-emerald-600">●</span>
-                        ) : (
-                          <span className="text-xs text-red-400">●</span>
+
+              {/* 모드 전환 탭 */}
+              <div className="flex gap-1 mb-4 p-1 rounded-xl" style={{ backgroundColor: '#F0D5C0' }}>
+                <button
+                  onClick={() => setSelectionMode('preset')}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={selectionMode === 'preset'
+                    ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                    : { color: C.textMid }
+                  }
+                >
+                  프리셋 모드
+                </button>
+                <button
+                  onClick={() => setSelectionMode('manual')}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={selectionMode === 'manual'
+                    ? { backgroundColor: '#fff', color: C.textDark, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                    : { color: C.textMid }
+                  }
+                >
+                  직접 선택
+                </button>
+              </div>
+
+              {/* 프리셋 모드 그리드 */}
+              {selectionMode === 'preset' && (
+                <div className="grid grid-cols-2 gap-3">
+                  {(Object.keys(PRESET_INFO) as QualityPreset[]).map((preset) => {
+                    const info = PRESET_INFO[preset];
+                    const isSelected = selectedPreset === preset;
+                    const ready = (() => {
+                      const types = Object.keys(MODULE_PRESETS[preset]);
+                      return types.every(type => {
+                        const chain = MODULE_PRESETS[preset][type];
+                        return chain.some(c => availableProviders[c.provider] === true);
+                      });
+                    })();
+                    const checking = Object.values(availableProviders).some(v => v === null);
+                    return (
+                      <div
+                        key={preset}
+                        onClick={() => setSelectedPreset(preset)}
+                        className="relative p-4 rounded-xl text-left transition cursor-pointer"
+                        style={isSelected
+                          ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg }
+                          : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
+                        }
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="font-bold text-base" style={{ color: C.textDark }}>
+                            {preset === 'standard' ? '⚡ ' : '✦ '}{info.label}
+                          </div>
+                          {checking ? (
+                            <span className="text-xs" style={{ color: C.textLight }}>…</span>
+                          ) : ready ? (
+                            <span className="text-xs text-emerald-600">●</span>
+                          ) : (
+                            <span className="text-xs text-red-400">●</span>
+                          )}
+                        </div>
+                        <div className="text-sm font-medium mb-1" style={{ color: C.accent }}>{info.description}</div>
+                        <div className="text-xs" style={{ color: C.textLight }}>{info.detail}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 직접 선택 모드 그리드 */}
+              {selectionMode === 'manual' && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {(Object.keys(PROVIDER_CONFIGS) as AIProvider[]).map((provider) => {
+                    const cfg = PROVIDER_CONFIGS[provider];
+                    const available = availableProviders[provider];
+                    const isSelected = selectedProvider === provider;
+                    const currentModel = cfg.models.find(m => m.id === selectedModels[provider]) ?? cfg.models[0];
+                    const dotRow = (score: number, color: string) =>
+                      Array.from({ length: 5 }, (_, i) => (
+                        <span key={i} style={{ color: i < score ? color : C.border, fontSize: 10 }}>●</span>
+                      ));
+                    return (
+                      <div
+                        key={provider}
+                        onClick={() => setSelectedProvider(provider)}
+                        className="relative p-3 rounded-xl text-left transition cursor-pointer"
+                        style={isSelected
+                          ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg }
+                          : { border: `2px solid ${C.border}`, backgroundColor: '#fff' }
+                        }
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold text-sm" style={{ color: C.textDark }}>{cfg.label}</div>
+                          {available === null ? (
+                            <span className="text-xs" style={{ color: C.textLight }}>…</span>
+                          ) : available ? (
+                            <span className="text-xs text-emerald-600">●</span>
+                          ) : (
+                            <span className="text-xs text-red-400">●</span>
+                          )}
+                        </div>
+                        <div className="text-xs mt-0.5 mb-2" style={{ color: C.textMid }}>{cfg.description}</div>
+
+                        {/* 스펙 배지 */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] w-7" style={{ color: C.textLight }}>품질</span>
+                            <div className="flex gap-px">{dotRow(currentModel.quality, C.accent)}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] w-7" style={{ color: C.textLight }}>속도</span>
+                            <div className="flex gap-px">{dotRow(currentModel.speed, C.amber)}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] w-7" style={{ color: C.textLight }}>비용</span>
+                            <div className="flex gap-px">{dotRow(currentModel.cost, '#4ade80')}</div>
+                          </div>
+                        </div>
+
+                        {isSelected && cfg.models.length > 1 && (
+                          <select
+                            value={selectedModels[provider]}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setSelectedModels(prev => ({ ...prev, [provider]: e.target.value }))}
+                            className="mt-2 w-full text-xs rounded px-1.5 py-1 cursor-pointer"
+                            style={{ border: `1px solid ${C.accent}`, backgroundColor: '#fff', color: C.textDark }}
+                          >
+                            {cfg.models.map(m => (
+                              <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
+                            ))}
+                          </select>
                         )}
                       </div>
-                      <div className="text-xs mt-0.5 mb-2" style={{ color: C.textMid }}>{cfg.description}</div>
-
-                      {/* 스펙 배지 */}
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>품질</span>
-                          <div className="flex gap-px">{dotRow(currentModel.quality, C.accent)}</div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>속도</span>
-                          <div className="flex gap-px">{dotRow(currentModel.speed, C.amber)}</div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] w-7" style={{ color: C.textLight }}>비용</span>
-                          <div className="flex gap-px">{dotRow(currentModel.cost, '#4ade80')}</div>
-                        </div>
-                      </div>
-
-                      {isSelected && cfg.models.length > 1 && (
-                        <select
-                          value={selectedModels[provider]}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setSelectedModels(prev => ({ ...prev, [provider]: e.target.value }))}
-                          className="mt-2 w-full text-xs rounded px-1.5 py-1 cursor-pointer"
-                          style={{ border: `1px solid ${C.accent}`, backgroundColor: '#fff', color: C.textDark }}
-                        >
-                          {cfg.models.map(m => (
-                            <option key={m.id} value={m.id}>{m.label} — {m.description}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* ── 시작 방법 선택 탭 ──────────────────────────────── */}
