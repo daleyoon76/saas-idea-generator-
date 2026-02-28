@@ -383,27 +383,17 @@ function WorkflowPageInner() {
   const expectedEndRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const pickerActiveRef = useRef(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
-  const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
-  const [pendingFileFormat, setPendingFileFormat] = useState<'docx' | 'md'>('docx');
+  const saveCountRef = useRef<Record<string, number>>({});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [saveDirHandle, setSaveDirHandle] = useState<any>(null);
-  const [saveDirName, setSaveDirName] = useState('');
-  const [resolvedFileName, setResolvedFileName] = useState('');
+  const lastSaveHandleRef = useRef<any>(null);
   // 실측 생성 시간 (아이디어 생성 / 사업기획서 생성 완료 후 표시)
   const [lastGenTime, setLastGenTime] = useState<{ seconds: number; label: string } | null>(null);
   // 기획서 Import 컨텍스트 (guided 페이지에서 import 시 전달됨)
   const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
-  const [canPickDirectory, setCanPickDirectory] = useState(false);
 
   useEffect(() => {
     checkProviders();
-    // File System Access API 사용 가능 여부 (Chrome/Edge 등)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setCanPickDirectory(typeof (window as any).showDirectoryPicker === 'function');
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
@@ -1150,128 +1140,76 @@ function WorkflowPageInner() {
     return `사업기획서_${kw}_${ver}_${plan.ideaName}`;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function resolveUniqueFileName(dirHandle: any, baseName: string, ext: string): Promise<string> {
-    let candidate = `${baseName}${ext}`;
-    let num = 0;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      try {
-        await dirHandle.getFileHandle(candidate);
-        // 파일이 존재하면 번호 증가
-        num++;
-        candidate = `${baseName}_${String(num).padStart(2, '0')}${ext}`;
-      } catch {
-        // 파일이 없으면 이 이름 사용
-        break;
-      }
-    }
-    return candidate;
-  }
-
-  async function pickSaveFolder() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof (window as any).showDirectoryPicker !== 'function') return;
-    if (pickerActiveRef.current) return;
-    pickerActiveRef.current = true;
+  function getSaveCount(countKey: string): number {
+    // localStorage 우선, 없으면 세션 ref
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
-      setSaveDirHandle(handle);
-      setSaveDirName(handle.name);
-      // 선택된 폴더에서 중복 검사하여 파일명 확정
-      if (pendingPlan) {
-        const base = getSaveBaseName(pendingPlan, pendingPlanType);
-        const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
-        const resolved = await resolveUniqueFileName(handle, base, ext);
-        setResolvedFileName(resolved);
+      const stored = localStorage.getItem('save-counts');
+      if (stored) {
+        const map = JSON.parse(stored);
+        if (typeof map[countKey] === 'number') return map[countKey];
       }
-    } catch {
-      // NotAllowedError 등 → 폴더 선택 불가 환경 (Cursor 내장 브라우저 등)
-      // 폴더 없이 저장 버튼만으로 다운로드 가능
-    } finally {
-      pickerActiveRef.current = false;
-    }
+    } catch { /* ignore */ }
+    return saveCountRef.current[countKey] || 0;
   }
 
-  function openSaveDialog(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan', format: 'docx' | 'md' = 'docx') {
-    setPendingPlan(plan);
-    setPendingPlanType(type);
-    setPendingFileFormat(format);
-    // 폴더가 이미 선택되어 있으면 중복 검사 재실행
+  function incrementSaveCount(countKey: string) {
+    const next = getSaveCount(countKey) + 1;
+    saveCountRef.current[countKey] = next;
+    try {
+      const stored = localStorage.getItem('save-counts');
+      const map = stored ? JSON.parse(stored) : {};
+      map[countKey] = next;
+      localStorage.setItem('save-counts', JSON.stringify(map));
+    } catch { /* ignore */ }
+  }
+
+  async function saveFile(plan: BusinessPlan, type: 'bizplan' | 'prd' = 'bizplan', format: 'docx' | 'md' = 'docx') {
     const base = getSaveBaseName(plan, type);
     const ext = format === 'md' ? '.md' : '.docx';
-    if (saveDirHandle) {
-      resolveUniqueFileName(saveDirHandle, base, ext).then(setResolvedFileName).catch(() => setResolvedFileName(`${base}${ext}`));
-    } else {
-      setResolvedFileName(`${base}${ext}`);
-    }
-    setShowSaveDialog(true);
-  }
-
-  async function executeSave() {
-    if (!pendingPlan) return;
-    if (pickerActiveRef.current) return;
-    setShowSaveDialog(false);
-
-    const base = getSaveBaseName(pendingPlan, pendingPlanType);
-    const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
+    const countKey = `${base}${ext}`;
+    const count = getSaveCount(countKey);
+    const suggestedName = count === 0 ? `${base}${ext}` : `${base}_${String(count).padStart(2, '0')}${ext}`;
 
     let blob: Blob;
     try {
-      if (pendingFileFormat === 'md') {
-        blob = new Blob([pendingPlan.content], { type: 'text/markdown;charset=utf-8' });
+      if (format === 'md') {
+        blob = new Blob([plan.content], { type: 'text/markdown;charset=utf-8' });
       } else {
-        blob = await buildDocxBlob(pendingPlan);
+        blob = await buildDocxBlob(plan);
       }
     } catch (err) {
-      console.error('[docx 저장 실패]', err);
-      alert('문서 생성 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
+      console.error('[문서 생성 실패]', err);
+      alert('문서 생성 중 오류가 발생했습니다.');
       return;
     }
 
-    // 폴더가 선택되어 있으면 → 해당 폴더에 직접 저장
-    if (saveDirHandle) {
-      try {
-        const fileName = await resolveUniqueFileName(saveDirHandle, base, ext);
-        const fileHandle = await saveDirHandle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return;
-      } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-        // 권한 만료 등 → 폴더 해제 후 폴백
-        setSaveDirHandle(null);
-        setSaveDirName('');
-      }
-    }
-
-    // 폴더 미선택 → 네이티브 Save As 또는 브라우저 다운로드
-    const fileName = `${base}${ext}`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof (window as any).showSaveFilePicker === 'function' && !pickerActiveRef.current) {
-      pickerActiveRef.current = true;
+    if (typeof (window as any).showSaveFilePicker === 'function') {
       try {
-        const mimeType = pendingFileFormat === 'md' ? 'text/markdown' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const mimeType = format === 'md' ? 'text/markdown' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fileHandle = await (window as any).showSaveFilePicker({
-          suggestedName: fileName,
-          types: [{ description: pendingFileFormat === 'md' ? 'Markdown' : 'Word Document', accept: { [mimeType]: [ext] } }],
-        });
+        const pickerOpts: any = {
+          suggestedName,
+          types: [{ description: format === 'md' ? 'Markdown' : 'Word Document', accept: { [mimeType]: [ext] } }],
+        };
+        if (lastSaveHandleRef.current) {
+          pickerOpts.startIn = lastSaveHandleRef.current;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fileHandle = await (window as any).showSaveFilePicker(pickerOpts);
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
+        lastSaveHandleRef.current = fileHandle;
+        incrementSaveCount(countKey);
         return;
       } catch (e: unknown) {
         if (e instanceof DOMException && e.name === 'AbortError') return;
-        // NotAllowedError 등 → triggerBrowserDownload 폴백
-      } finally {
-        pickerActiveRef.current = false;
       }
     }
 
-    triggerBrowserDownload(blob, fileName);
+    triggerBrowserDownload(blob, suggestedName);
+    incrementSaveCount(countKey);
   }
 
   async function generatePRD(sourcePlan?: BusinessPlan, returnStep: WorkflowStep = 'view-plan') {
@@ -2412,8 +2350,8 @@ function WorkflowPageInner() {
                   위로
                 </button>
                 <div className="flex gap-2">
-                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
+                  <button type="button" onClick={() => saveFile(businessPlans[currentPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button type="button" onClick={() => saveFile(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -2627,8 +2565,8 @@ function WorkflowPageInner() {
                 </button>
                 <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
-                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
+                  <button type="button" onClick={() => saveFile(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button type="button" onClick={() => saveFile(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
               <div className="mt-4 flex justify-center">
@@ -2735,50 +2673,14 @@ function WorkflowPageInner() {
                 </button>
                 <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
                 <div className="flex gap-2">
-                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
-                  <button onClick={() => openSaveDialog(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
+                  <button type="button" onClick={() => saveFile(prds[currentPRDIndex], 'prd', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
+                  <button type="button" onClick={() => saveFile(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Save Dialog Modal */}
-      {showSaveDialog && pendingPlan && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl shadow-2xl p-6 w-96" style={{ backgroundColor: C.cardBg, border: `1px solid ${C.border}` }}>
-            <h3 className="text-base font-semibold mb-5" style={{ color: C.textDark }}>
-              {pendingFileFormat === 'md' ? '마크다운(.md)으로 저장' : '워드(.docx) 파일로 저장'}
-            </h3>
-            {/* 저장 폴더 */}
-            <div className="mb-4">
-              <div className="text-xs mb-1" style={{ color: C.textLight }}>저장 폴더</div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: saveDirHandle ? '#E8F5E9' : '#f5f5f5', color: saveDirHandle ? C.textDark : C.textLight }}>
-                  {saveDirHandle ? `/${saveDirName}` : '선택 없이 저장 시 다운로드'}
-                </div>
-                {canPickDirectory && (
-                  <button onClick={pickSaveFolder} className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
-                    {saveDirHandle ? '변경' : '폴더 선택'}
-                  </button>
-                )}
-              </div>
-            </div>
-            {/* 파일명 */}
-            <div className="mb-5">
-              <div className="text-xs mb-1" style={{ color: C.textLight }}>파일명{saveDirHandle ? ' (중복 자동 확인)' : ''}</div>
-              <div className="text-sm px-3 py-2 rounded-lg break-all" style={{ backgroundColor: '#F0D5C0', color: C.textDark }}>
-                {resolvedFileName}
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowSaveDialog(false)} className="px-4 py-2 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>취소</button>
-              <button onClick={executeSave} className="px-5 py-2 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>저장</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
