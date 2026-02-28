@@ -1437,7 +1437,14 @@ function WorkflowPageInner() {
         if (riskSummary) {
           mergedCombined = injectRiskIntoExecSummary(combined, riskSummary);
         }
-        finalContent = mergedCombined.trimEnd() + '\n\n---\n\n' + section14;
+        // 참고문헌 앞에 섹션 14 삽입
+        const refPattern = /\n(##\s+\**참고문헌)/;
+        const refMatch = mergedCombined.match(refPattern);
+        if (refMatch && refMatch.index !== undefined) {
+          finalContent = mergedCombined.slice(0, refMatch.index).trimEnd() + '\n\n---\n\n' + section14 + '\n\n---\n' + mergedCombined.slice(refMatch.index);
+        } else {
+          finalContent = mergedCombined.trimEnd() + '\n\n---\n\n' + section14;
+        }
         onAgentComplete(5, `"${idea.name}" Devil's Advocate 검토 완료${r5Data.meta?.truncated ? ' (잘림 감지)' : ''}`);
       }
     } catch (e) {
