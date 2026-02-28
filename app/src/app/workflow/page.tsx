@@ -283,8 +283,21 @@ function MermaidDiagram({ chart }: { chart: string }) {
     setFit(svgWidth <= containerWidth);
   }, [svg]);
 
-  // 근본적 대책: 렌더링 실패 시 다이어그램을 조용히 숨김 (raw 코드 노출 방지)
-  if (error) return null;
+  if (error) return (
+    <div className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm"
+      style={{ backgroundColor: CANYON.cream, borderColor: CANYON.amber, color: CANYON.textMid }}>
+      <p className="mb-0">다이어그램을 표시할 수 없습니다.</p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs" style={{ color: CANYON.textLight }}>
+          원본 다이어그램 코드 보기
+        </summary>
+        <pre className="mt-2 p-3 rounded-xl text-xs overflow-auto max-h-48 whitespace-pre-wrap"
+          style={{ backgroundColor: CANYON.bg, color: CANYON.textDark, fontFamily: 'var(--font-mono), monospace' }}>
+          {chart}
+        </pre>
+      </details>
+    </div>
+  );
   return <div className={`my-4 overflow-x-auto mermaid-wrap${fit ? ' fit' : ''}`}
     style={{ width: '100%' }}
     ref={mermaidRef}
