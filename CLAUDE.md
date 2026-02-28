@@ -30,11 +30,15 @@ npx eslint src/  # 린트
 keyword → generating-ideas → select-ideas → generating-plan → view-plan
 ```
 
-### AI 공급자 추상화
+### AI 공급자 추상화 (프리셋 기반 멀티모델 라우팅)
 
-`/api/generate` 라우트가 모든 AI 호출을 담당한다. `provider` 파라미터(ollama/claude/gemini/openai)에 따라 각 API로 라우팅한다. 프론트엔드는 항상 `/api/generate`만 호출한다.
+`/api/generate` 라우트가 모든 AI 호출을 담당한다. 클라이언트는 `preset`(기본/고품질)과 `type`(모듈명)을 전송하면, 서버가 `MODULE_PRESETS`에서 모델 체인을 조회하여 1순위부터 순차 시도한다. API 키 미설정이나 런타임 오류 시 자동으로 다음 순위로 폴백한다.
 
-`/api/providers` (GET)는 Ollama 연결 상태와 환경변수로 API 키 설정 여부를 반환한다. 페이지 마운트 시 호출해 모델 선택 UI의 활성/비활성을 결정한다.
+- **프리셋 정의**: `lib/types.ts`의 `MODULE_PRESETS` (9모듈 × 2프리셋 × 3순위)
+- **모델 배정표**: `docs/model-presets.md` 참고
+- **폴백 체인**: `callWithPreset()` 함수가 런타임 try/catch로 처리
+
+`/api/providers` (GET)는 Ollama 연결 상태와 환경변수로 API 키 설정 여부를 반환한다. 페이지 마운트 시 호출해 프리셋 사용 가능 여부를 결정한다.
 
 기존 `/api/ollama` 라우트는 하위호환용으로 남아있으나 워크플로우에서는 사용하지 않는다.
 
@@ -48,16 +52,14 @@ keyword → generating-ideas → select-ideas → generating-plan → view-plan
 
 알고리즘 상세 내용은 `docs/algorithm.md` 참고.
 
-### 기본 모델
+### 모델 프리셋
 
-| Provider | 기본 모델 |
-|----------|-----------|
-| Ollama | gemma2:9b |
-| Claude | claude-sonnet-4-6 |
-| Gemini | gemini-2.0-flash |
-| OpenAI | gpt-4o |
+| 프리셋 | 설명 | 주요 모델 |
+|--------|------|-----------|
+| 기본 (Standard) | 비용 효율 최적화 | GPT 중심 + Gemini Flash 보조 |
+| 고품질 (Premium) | 최고 품질 3자 혼합 | Claude(한국어) + Gemini Pro(데이터) + GPT(추론) |
 
-`lib/types.ts`의 `PROVIDER_CONFIGS`에 정의되어 있다.
+모듈별 상세 배정은 `docs/model-presets.md`, 타입 정의는 `lib/types.ts`의 `MODULE_PRESETS` 참고.
 
 ## 환경변수
 
@@ -104,6 +106,7 @@ Ollama는 별도 API 키 없이 `ollama serve` 실행만 필요. 기본 모델�
 | `plan.md` | 목표 설계 — 단계별 기획 의도, 구현 목표. 방향 변경 시 업데이트 |
 | `CLAUDE.md` | 현재 상태 — 실제 구현된 아키텍처, 개발 규칙 |
 | `docs/algorithm.md` | 알고리즘 상세 — 프롬프트/검색 로직 구체 내용 |
+| `docs/model-presets.md` | 모델 배정표 — 프리셋별 모듈별 1·2·3순위 모델. `MODULE_PRESETS` 변경 시 업데이트 |
 | `to-do.md` | 작업 목록 — 완료/미완료 항목 추적 |
 
 ## 보안 관련 필수 조건

@@ -397,9 +397,13 @@ function WorkflowPageInner() {
   // 기획서 Import 컨텍스트 (guided 페이지에서 import 시 전달됨)
   const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
+  const [canPickDirectory, setCanPickDirectory] = useState(false);
 
   useEffect(() => {
     checkProviders();
+    // File System Access API 사용 가능 여부 (Chrome/Edge 등)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setCanPickDirectory(typeof (window as any).showDirectoryPicker === 'function');
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
@@ -2754,7 +2758,7 @@ function WorkflowPageInner() {
                 <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: saveDirHandle ? '#E8F5E9' : '#f5f5f5', color: saveDirHandle ? C.textDark : C.textLight }}>
                   {saveDirHandle ? `/${saveDirName}` : '선택 없이 저장 시 다운로드'}
                 </div>
-                {typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function' && (
+                {canPickDirectory && (
                   <button onClick={pickSaveFolder} className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
                     {saveDirHandle ? '변경' : '폴더 선택'}
                   </button>

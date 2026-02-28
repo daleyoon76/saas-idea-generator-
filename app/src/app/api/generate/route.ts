@@ -116,36 +116,47 @@ function isProviderAvailable(provider: AIProvider): boolean {
   }
 }
 
-function resolveModel(preset: QualityPreset, type: string): { provider: AIProvider; model: string } {
-  const chain = MODULE_PRESETS[preset]?.[type];
-  if (!chain) {
-    throw new Error(`알 수 없는 프리셋/타입 조합: ${preset}/${type}`);
+/** provider → 실제 LLM API 호출 */
+async function callProvider(provider: AIProvider, model: string, prompt: string, maxTokens: number, jsonMode: boolean): Promise<LLMResult> {
+  switch (provider) {
+    case 'ollama':  return generateWithOllama(model, prompt, jsonMode);
+    case 'claude':  return generateWithClaude(model, prompt, maxTokens);
+    case 'gemini':  return generateWithGemini(model, prompt, maxTokens, jsonMode);
+    case 'openai':  return generateWithOpenAI(model, prompt, maxTokens);
+    default: throw new Error(`지원하지 않는 AI 공급자: ${provider}`);
   }
-  for (const config of chain) {
-    if (isProviderAvailable(config.provider)) {
+}
+
+/** 프리셋 fallback chain: API 키 확인 → 실제 호출 시도 → 실패 시 다음 모델 */
+async function callWithPreset(
+  preset: QualityPreset, type: string, prompt: string, maxTokens: number, jsonMode: boolean,
+): Promise<{ result: LLMResult; provider: AIProvider; model: string }> {
+  const chain = MODULE_PRESETS[preset]?.[type];
+  if (!chain) throw new Error(`알 수 없는 프리셋/타입 조합: ${preset}/${type}`);
+
+  const available = chain.filter(c => isProviderAvailable(c.provider));
+  if (available.length === 0) {
+    throw new Error('사용 가능한 AI 공급자가 없습니다. .env.local에 API 키를 하나 이상 설정해주세요.');
+  }
+
+  let lastError: Error | null = null;
+  for (const config of available) {
+    try {
       console.log(`[프리셋] ${preset}/${type} → ${config.provider}/${config.model}`);
-      return { provider: config.provider, model: config.model };
+      const result = await callProvider(config.provider, config.model, prompt, maxTokens, jsonMode);
+      return { result, provider: config.provider, model: config.model };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[프리셋] ${config.provider}/${config.model} 실패 → 다음 모델 시도:`, lastError.message);
     }
   }
-  throw new Error('사용 가능한 AI 공급자가 없습니다. .env.local에 API 키를 하나 이상 설정해주세요.');
+  throw lastError ?? new Error('모든 AI 모델 호출에 실패했습니다.');
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { preset, provider: directProvider, model: directModel, prompt: rawPrompt, type, idea, searchResults } = body;
-
-    // 프리셋 모드: 서버에서 최적 모델 자동 선택 / 직접 지정: 하위 호환
-    let provider: AIProvider;
-    let model: string;
-    if (preset) {
-      const resolved = resolveModel(preset as QualityPreset, type as string);
-      provider = resolved.provider;
-      model = resolved.model;
-    } else {
-      provider = directProvider || 'ollama';
-      model = directModel;
-    }
 
     const jsonMode = type === 'json' || type === 'generate-ideas';
 
@@ -209,22 +220,21 @@ export async function POST(request: NextRequest) {
     };
     const maxTokens = TOKEN_LIMITS[type] ?? 9000;
     let result: LLMResult;
+    let provider: AIProvider;
+    let model: string;
 
-    switch (provider) {
-      case 'ollama':
-        result = await generateWithOllama(model || 'gemma2:9b', prompt, jsonMode);
-        break;
-      case 'claude':
-        result = await generateWithClaude(model || 'claude-sonnet-4-6', prompt, maxTokens);
-        break;
-      case 'gemini':
-        result = await generateWithGemini(model || 'gemini-2.5-flash', prompt, maxTokens, jsonMode);
-        break;
-      case 'openai':
-        result = await generateWithOpenAI(model || 'gpt-4o', prompt, maxTokens);
-        break;
-      default:
-        return NextResponse.json({ error: '지원하지 않는 AI 공급자입니다.' }, { status: 400 });
+    if (preset) {
+      // 프리셋 모드: fallback chain으로 자동 시도
+      const resolved = await callWithPreset(preset as QualityPreset, type as string, prompt, maxTokens, jsonMode);
+      result = resolved.result;
+      provider = resolved.provider;
+      model = resolved.model;
+    } else {
+      // 직접 지정 모드 (하위 호환)
+      provider = directProvider || 'ollama';
+      model = directModel || '';
+      const defaults: Record<string, string> = { ollama: 'gemma2:9b', claude: 'claude-sonnet-4-6', gemini: 'gemini-2.5-flash', openai: 'gpt-4o' };
+      result = await callProvider(provider, model || defaults[provider] || '', prompt, maxTokens, jsonMode);
     }
 
     return NextResponse.json({
