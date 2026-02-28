@@ -67,6 +67,18 @@ function sanitizeMermaidSyntax(src: string): string {
   // 리터럴 \n → <br/> (Mermaid 줄바꿈). 실제 개행(\n 문자)과 구별됨.
   result = result.replace(/\\n/g, '<br/>');
 
+  // [], {} 노드 라벨 및 subgraph 이름 내 () → 전각 괄호 （）로 치환
+  // (mermaid가 ()를 노드 형태로 해석하는 파싱 오류 방지)
+  result = result.replace(/\[[^\]]*\]/g, (m) =>
+    m.replace(/\(/g, '（').replace(/\)/g, '）')
+  );
+  result = result.replace(/\{[^}]*\}/g, (m) =>
+    m.replace(/\(/g, '（').replace(/\)/g, '）')
+  );
+  result = result.replace(/^(\s*subgraph\s+)(.+)$/gm, (_, prefix, name) =>
+    prefix + name.replace(/\(/g, '（').replace(/\)/g, '）')
+  );
+
   // 긴 노드 라벨에 자동 줄바꿈 삽입 (각 줄이 13자 초과 시, 재귀)
   const MAX_LINE = 13;
   function breakLongSegment(seg: string): string {
@@ -1187,9 +1199,11 @@ function WorkflowPageInner() {
 
   function getSaveBaseName(plan: BusinessPlan, type: 'bizplan' | 'prd') {
     const kw = keyword || '없음';
-    if (type === 'prd') return `PRD_${kw}_${plan.ideaName}`;
+    const now = new Date();
+    const ts = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    if (type === 'prd') return `PRD_${kw}_${plan.ideaName}_${ts}`;
     const ver = plan.version === 'full' ? 'Full' : 'Draft';
-    return `사업기획서_${kw}_${ver}_${plan.ideaName}`;
+    return `사업기획서_${kw}_${ver}_${plan.ideaName}_${ts}`;
   }
 
   function getSaveCount(countKey: string): number {
@@ -1419,8 +1433,8 @@ function WorkflowPageInner() {
     onAgentComplete: (agentNum: number, agentLabel: string) => void,
     draftContent?: string,
   ): Promise<BusinessPlan> {
-    // 기존 기획서 컨텍스트: 프롬프트에서 8K로 재절삭되므로 클라이언트에서도 8K로 캡
-    const existingCtx = (importedPlanContent || draftContent || '').slice(0, 8000) || undefined;
+    // 기존 기획서 컨텍스트: 프롬프트에서 6K로 재절삭되므로 클라이언트에서도 6K로 캡
+    const existingCtx = (importedPlanContent || draftContent || '').slice(0, 6000) || undefined;
 
     // 시장 조사 (동적 쿼리 생성 → Tavily 검색)
     let planSearchResults: SearchResult[] = [];
@@ -1439,7 +1453,7 @@ function WorkflowPageInner() {
     const agentEtaMs = 90000;
     const headers = { 'Content-Type': 'application/json' };
     // 이전 에이전트 출력 캡 (request body 과대 방지, 서버 프롬프트에서 재절삭됨)
-    const cap = (s: string, max = 12000) => s.length > max ? s.slice(0, max) : s;
+    const cap = (s: string, max = 10000) => s.length > max ? s.slice(0, max) : s;
     // 검색결과도 캡 (snippet만 추려서 크기 줄임)
     const cappedSearch = planSearchResults.slice(0, 5).map(r => ({ title: r.title, url: r.url, snippet: (r.snippet || '').slice(0, 300) }));
 
@@ -1526,7 +1540,7 @@ function WorkflowPageInner() {
     setLoadingMessage(`[에이전트 5/5] "${idea.name}" Devil's Advocate 검토 중...`);
     try {
       // 프롬프트 크기 제한: combined가 너무 크면 앞부분만 전달
-      const cappedPlan = combined.length > 40000 ? combined.slice(0, 40000) + '\n\n...(이하 생략)' : combined;
+      const cappedPlan = combined.length > 30000 ? combined.slice(0, 30000) + '\n\n...(이하 생략)' : combined;
       const r5 = await fetchWithTimeout('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1707,9 +1721,15 @@ function WorkflowPageInner() {
     strategyContent: string,    // 섹션 1, 4, 9, 10
     financeContent: string      // 섹션 11, 12, 13, 참고문헌
   ): string {
+    /** content에서 모든 ## / ### 헤딩 라인을 추출 (디버깅용) */
+    function scanHeadings(content: string): string[] {
+      return (content.match(/^#{2,3}\s+.+$/gm) || []).map(h => h.slice(0, 80));
+    }
+
     /**
      * content 내에서 sectionNum 번호의 섹션을 추출한다.
-     * "## 2." / "## **2.**" / "## 2. 제목" 등 다양한 형태를 처리.
+     * 1차: strict 패턴 (번호 뒤 구두점/공백+한글 요구)
+     * 2차: loose 패턴 (번호만 확인, 뒤가 숫자가 아닌 것만 체크)
      */
     function getSection(content: string, sectionNum: number | '참고문헌'): string {
       const normalized = '\n' + content; // 첫 섹션도 \n## 로 찾을 수 있게
@@ -1720,25 +1740,36 @@ function WorkflowPageInner() {
         if (!m || m.index === undefined) return '';
         startIdx = m.index + 1;
       } else {
-        // H2/H3 + 마침표·콜론·괄호·공백 등 다양한 LLM 헤딩 변형 대응
-        // 예: "## 2. 트렌드" / "### **2:** 트렌드" / "## 2) 트렌드" / "## 2 트렌드"
-        const pattern = new RegExp(
+        // 1차: strict — H2/H3 + 구두점·괄호·공백+한글 등 다양한 LLM 헤딩 변형 대응
+        const strict = new RegExp(
           `\n#{2,3}\\s+\\**${sectionNum}(?:[.．:：)\\)]|\\s+(?=[가-힣A-Z]))(?![0-9])`
         );
-        const m = normalized.match(pattern);
-        if (!m || m.index === undefined) return '';
+        let m = normalized.match(strict);
+        if (!m || m.index === undefined) {
+          // 2차: loose — "## 10" 뒤에 숫자가 아니기만 하면 매칭
+          // 볼드(**), 마침표, 콜론, 공백, 줄바꿈 등 모두 허용
+          const loose = new RegExp(
+            `\n#{2,3}\\s+\\**${sectionNum}\\**(?![0-9])`
+          );
+          m = normalized.match(loose);
+          if (!m || m.index === undefined) return '';
+          console.log(`[getSection] 섹션 ${sectionNum}: loose 패턴으로 매칭됨`);
+        }
         startIdx = m.index + 1;
       }
 
-      // 다음 ##/### 섹션이 시작되는 위치 찾기
+      // 다음 ## 섹션(H2)이 시작되는 위치 찾기 — ### 서브섹션은 현재 섹션에 포함
       const rest = normalized.slice(startIdx + 1);
-      const nextMatch = rest.match(/\n#{2,3}\s/);
+      const nextMatch = rest.match(/\n##\s/);
       const endIdx = nextMatch?.index !== undefined
         ? startIdx + 1 + nextMatch.index
         : normalized.length;
 
       return normalized.slice(startIdx, endIdx).trim();
     }
+
+    // 디버그: 에이전트별 콘텐츠 길이 로그
+    console.log(`[combineFullPlanSections] 콘텐츠 길이 — market: ${marketContent.length}, competition: ${competitionContent.length}, strategy: ${strategyContent.length}, finance: ${financeContent.length}`);
 
     // 에이전트별 섹션 추출 + 누락 로깅
     const agentSections: Record<string, { nums: (number | '참고문헌')[]; content: string }> = {
@@ -1750,29 +1781,33 @@ function WorkflowPageInner() {
     const missingByAgent: Record<string, (number | '참고문헌')[]> = {};
     for (const [agent, { nums, content }] of Object.entries(agentSections)) {
       const missing = nums.filter(n => !getSection(content, n));
-      if (missing.length > 0) missingByAgent[agent] = missing;
+      if (missing.length > 0) {
+        missingByAgent[agent] = missing;
+        // 누락 원인 진단: 해당 에이전트 콘텐츠의 모든 헤딩 출력
+        const headings = scanHeadings(content);
+        console.warn(`[combineFullPlanSections] ${agent} 누락 섹션: ${missing.join(', ')} | 콘텐츠 길이: ${content.length} | 발견된 헤딩:\n  ${headings.join('\n  ') || '(헤딩 없음)'}`);
+      }
     }
     if (Object.keys(missingByAgent).length > 0) {
       const parts = Object.entries(missingByAgent).map(([a, nums]) => `${a}: 섹션 ${nums.join(', ')}`);
-      console.warn(`[combineFullPlanSections] 누락: ${parts.join(' | ')}`);
+      console.warn(`[combineFullPlanSections] 누락 요약: ${parts.join(' | ')}`);
     }
 
-    const ordered = [
-      getSection(strategyContent, 1),
-      getSection(marketContent, 2),
-      getSection(marketContent, 3),
-      getSection(strategyContent, 4),
-      getSection(competitionContent, 5),
-      getSection(competitionContent, 6),
-      getSection(competitionContent, 7),
-      getSection(marketContent, 8),
-      getSection(strategyContent, 9),
-      getSection(strategyContent, 10),
-      getSection(financeContent, 11),
-      getSection(financeContent, 12),
-      getSection(financeContent, 13),
-      getSection(financeContent, '참고문헌'),
-    ].filter(Boolean);
+    const sectionLabels: (number | '참고문헌')[] = [1,2,3,4,5,6,7,8,9,10,11,12,13,'참고문헌'];
+    const sectionSources = [
+      strategyContent, marketContent, marketContent, strategyContent,
+      competitionContent, competitionContent, competitionContent, marketContent,
+      strategyContent, strategyContent, financeContent, financeContent, financeContent, financeContent,
+    ];
+    const extracted = sectionLabels.map((num, i) => getSection(sectionSources[i], num));
+
+    // 섹션별 길이 진단 로그
+    const sizeLog = sectionLabels.map((num, i) => `§${num}:${extracted[i].length}`).join(' ');
+    console.log(`[combineFullPlanSections] 섹션별 길이: ${sizeLog}`);
+
+    const ordered = extracted.filter(Boolean);
+
+    console.log(`[combineFullPlanSections] 추출 성공: ${ordered.length}/14 섹션`);
 
     // 섹션 추출이 절반 이하로 실패하면 raw 조합으로 fallback
     if (ordered.length < 7) {
@@ -1888,6 +1923,8 @@ function WorkflowPageInner() {
       .replace(/\r\n/g, '\n')
       .replace(/^[ \t]+$/gm, '')
       .replace(/^(\|.*\|)[ \t]+$/gm, '$1');
+    // 0.2. 들여쓰기된 표 행을 좌측 정렬 (불릿 리스트 안 표가 텍스트로 렌더링되는 문제 해결)
+    result = result.replace(/^[ \t]+(\|)/gm, '$1');
     // 0.5. 깨진 테이블 복원: 줄바꿈 없이 한 줄에 이어붙여진 표 행을 분리
     result = fixBrokenTables(result);
     // 1. 표 행 사이의 빈 줄 제거: |로 시작하는 연속 행들 사이의 공백 줄을 제거

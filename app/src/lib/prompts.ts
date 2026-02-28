@@ -142,7 +142,7 @@ export function createIdeaExtractionPrompt(planContent: string): string {
 기획서에 해당 정보가 명시되지 않은 경우 내용을 바탕으로 합리적으로 추론하세요.
 
 ## 사업기획서 내용
-${planContent.slice(0, 15000)}
+${planContent.slice(0, 8000)}
 
 \`\`\`json
 {
@@ -187,7 +187,7 @@ function buildExistingPlanCtx(existingPlanContent?: string): string {
 아래는 사용자가 제공한 기존 기획서입니다. 이 내용을 기반으로 검증·보완·심화하세요.
 기존 내용과 모순되지 않으면서 더 구체적인 근거와 데이터를 추가하세요.
 
-${existingPlanContent.slice(0, 8000)}
+${existingPlanContent.slice(0, 6000)}
 `;
 }
 
@@ -474,9 +474,9 @@ export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: s
 ## 14. Devil's Advocate — 현실 검증 및 첫단계 추천
 
 ### 14.1 기획서 검토 의견
-- 기획서의 각 섹션을 검토하여 **비현실적이거나 과장된 부분**을 지적
-- 섹션별로 "## N. 제목 → 지적 사항" 형식으로 정리
-- 문제 없는 섹션은 생략
+- 가장 문제가 큰 섹션 **3~5개만 선별**하여 핵심 지적
+- "## N. 제목 → 지적 사항" 형식, 각 섹션당 bullet 1~3개
+- 사소한 문제나 정상 섹션은 완전히 생략
 
 ### 14.2 MVP 첫단계 추천
 - 가장 적은 리소스로 가장 빠르게 시장 검증할 수 있는 구체적 첫단계
@@ -493,6 +493,7 @@ export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: s
 ---
 
 작성 원칙:
+- **간결하게 작성 (전체 800단어 이내)**. 장황한 설명 없이 핵심만 bullet로
 - 낙관적 편향을 제거하고 냉정하게 검증
 - "~할 수 있다"보다 "~하려면 최소 X가 필요하다" 식의 구체적 조건 제시
 - Bullet point 중심, 항목별 명사형 마무리

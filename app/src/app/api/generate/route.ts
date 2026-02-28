@@ -262,26 +262,20 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 토큰 한도 정책 (개인 사용: 프로덕션 적정값 × 3) ────────────────────
-    // 타입                  프로덕션  개인(×3)
-    // generate-ideas          4,000   12,000
-    // business-plan           8,000   24,000
-    // full-plan-* (에이전트)   6,000   18,000
-    // generate-prd            5,000   15,000
-    // 기타                    3,000    9,000
-    // ※ 프로덕션 전환 시 각 값을 1/3로 줄이고 최적화 검토
+    // 프로덕션 기준 토큰 한도 (1x)
     const TOKEN_LIMITS: Record<string, number> = {
-      'generate-ideas':        12000,
-      'business-plan':         24000,
-      'full-plan-market':      18000,
-      'full-plan-competition': 18000,
-      'full-plan-strategy':    18000,
-      'full-plan-finance':     18000,
-      'full-plan-devil':       18000,
-      'generate-prd':          15000,
-      'extract-idea':          4000,
-      'generate-queries':      2000,
+      'generate-ideas':        4000,
+      'business-plan':         16000,   // 10섹션+참고문헌 단일 호출
+      'full-plan-market':      14000,   // 3섹션
+      'full-plan-competition': 14000,   // 3섹션
+      'full-plan-strategy':    16000,   // 4섹션
+      'full-plan-finance':     16000,   // 4섹션+참고문헌
+      'full-plan-devil':       6000,    // RISK_SUMMARY + 섹션 14 (프롬프트로 분량 제어)
+      'generate-prd':          5000,
+      'extract-idea':          2000,
+      'generate-queries':      1000,
     };
-    const maxTokens = TOKEN_LIMITS[type] ?? 9000;
+    const maxTokens = TOKEN_LIMITS[type] ?? 3000;
     let result: LLMResult;
     let provider: AIProvider;
     let model: string;

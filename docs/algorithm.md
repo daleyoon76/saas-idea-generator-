@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-28 (에이전트 실패 복구 + 섹션 추출 강화)
+> 마지막 업데이트: 2026-02-28 (토큰 예산 1x 프로덕션 기준 전환)
 
 ---
 
@@ -68,8 +68,19 @@ title: "알고리즘"
 | `generate-queries` | `buildSearchQueryPrompt()` 직접 호출 (jsonMode) | `keyword`, `queryContext`, `queryCount`, `ideaName?`, `ideaTarget?`, `ideaCategory?` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
-- `business-plan`, `generate-prd`, `full-plan-*` → `maxTokens: 16000`
-- 나머지 → `maxTokens: 8192`
+- 타입별 `maxTokens`는 `TOKEN_LIMITS` 테이블에서 관리:
+
+| 타입 | maxTokens |
+|------|-----------|
+| `generate-ideas` | 4,000 |
+| `business-plan` | 16,000 |
+| `full-plan-market` / `competition` | 14,000 |
+| `full-plan-strategy` / `finance` | 16,000 |
+| `full-plan-devil` | 6,000 |
+| `generate-prd` | 5,000 |
+| `extract-idea` | 2,000 |
+| `generate-queries` | 1,000 |
+| 기타 (fallback) | 3,000 |
 
 ---
 
@@ -170,7 +181,7 @@ LLM이 키워드 맥락에 맞는 검색 쿼리 3개를 동적 생성한 후, �
     ↓
 서버: buildSearchQueryPrompt() → 시장규모/트렌드/경쟁/기술/투자 5개 관점 커버 지시
     ↓
-LLM 호출 (jsonMode: true, maxTokens: 2000, 8초 타임아웃)
+LLM 호출 (jsonMode: true, maxTokens: 1000, 8초 타임아웃)
     ↓
 JSON 배열 파싱 → 검색 쿼리 3개 반환
 ```
@@ -357,7 +368,7 @@ LLM이 아이디어 맥락에 맞는 검색 쿼리 5개를 동적 생성한 후,
     ↓
 서버: buildSearchQueryPrompt() → 경쟁사/페인포인트/TAM/가격/규제 5개 관점 커버 지시
     ↓
-LLM 호출 (jsonMode: true, maxTokens: 2000, 8초 타임아웃)
+LLM 호출 (jsonMode: true, maxTokens: 1000, 8초 타임아웃)
     ↓
 JSON 배열 파싱 → 검색 쿼리 5개 반환
 ```
@@ -520,7 +531,7 @@ const pattern = new RegExp(
     ↓
 createPRDPrompt(idea, businessPlanContent, template)
     ↓
-LLM 호출 (maxTokens: 16000)
+LLM 호출 (maxTokens: 5000)
 ```
 
 - `view-plan`에서 호출 → 초안 기반 PRD
