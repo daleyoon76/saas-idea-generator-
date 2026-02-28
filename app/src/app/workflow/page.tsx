@@ -1275,7 +1275,10 @@ function WorkflowPageInner() {
   }
 
   function stripRiskSummary(devilContent: string): string {
-    return devilContent.replace(/<!-- RISK_SUMMARY -->[\s\S]*?<!-- \/RISK_SUMMARY -->\s*/, '').trim();
+    return devilContent
+      .replace(/<!-- RISK_SUMMARY -->[\s\S]*?<!-- \/RISK_SUMMARY -->\s*/, '')
+      .replace(/###\s*블록\s*\d[^:\n]*:[^\n]*\n*/g, '')
+      .trim();
   }
 
   function injectRiskIntoExecSummary(combined: string, riskSummary: string): string {
