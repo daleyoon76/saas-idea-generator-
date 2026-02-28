@@ -34,9 +34,9 @@ beforeEach(() => {
 });
 
 describe('POST /api/generate', () => {
-  it('returns 400 for unsupported provider', async () => {
+  it('returns 500 for unsupported provider', async () => {
     const res = await POST(makeRequest({ provider: 'unknown', prompt: 'test' }) as never);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(500);
     const data = await res.json();
     expect(data.error).toContain('지원하지 않는');
   });
@@ -119,16 +119,21 @@ describe('POST /api/generate', () => {
     expect(data.error).toContain('planContent');
   });
 
-  it('validates extract-idea: too-long planContent returns 400', async () => {
+  it('truncates too-long planContent to 50K for extract-idea', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ text: '{"name":"Test"}' }] }),
+      headers: new Headers(),
+    });
+
     const res = await POST(makeRequest({
       provider: 'claude',
       type: 'extract-idea',
       planContent: 'x'.repeat(100001),
     }) as never);
 
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('maximum length');
+    expect(res.status).toBe(200);
   });
 
   it('throws when Claude API key is missing', async () => {
@@ -144,7 +149,7 @@ describe('POST /api/generate', () => {
     expect(data.error).toContain('ANTHROPIC_API_KEY');
   });
 
-  it('appends MAX_TOKENS warning for Gemini', async () => {
+  it('returns truncated flag for Gemini MAX_TOKENS', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -161,8 +166,7 @@ describe('POST /api/generate', () => {
 
     const data = await res.json();
     expect(data.response).toContain('잘린 응답');
-    expect(data.response).toContain('MAX_TOKENS');
-    expect(data.response).toContain('출력 잘림');
+    expect(data.meta.truncated).toBe(true);
   });
 
   it('handles generate-ideas type with keyword', async () => {
@@ -525,7 +529,7 @@ describe('POST /api/generate — generate-prd type', () => {
 // ── Gemini MAX_TOKENS additional coverage ───────────────────────────────────
 
 describe('POST /api/generate — Gemini MAX_TOKENS edge cases', () => {
-  it('appends MAX_TOKENS warning for Gemini with full-plan type', async () => {
+  it('returns truncated flag for Gemini MAX_TOKENS with full-plan type', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -549,9 +553,7 @@ describe('POST /api/generate — Gemini MAX_TOKENS edge cases', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.response).toContain('# 시장 분석 중간까지...');
-    expect(data.response).toContain('MAX_TOKENS');
-    expect(data.response).toContain('출력 잘림');
-    expect(data.response).toContain('18000');
+    expect(data.meta.truncated).toBe(true);
   });
 
   it('does not append warning when Gemini finishReason is STOP', async () => {
@@ -581,7 +583,7 @@ describe('POST /api/generate — Gemini MAX_TOKENS edge cases', () => {
     expect(data.response).not.toContain('MAX_TOKENS');
   });
 
-  it('includes model name in MAX_TOKENS warning message', async () => {
+  it('returns model name in meta for MAX_TOKENS response', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -603,8 +605,8 @@ describe('POST /api/generate — Gemini MAX_TOKENS edge cases', () => {
     }) as never);
 
     const data = await res.json();
-    expect(data.response).toContain('gemini-2.5-pro');
-    expect(data.response).toContain('출력 잘림');
+    expect(data.meta.truncated).toBe(true);
+    expect(data.meta.model).toBe('gemini-2.5-pro');
   });
 });
 

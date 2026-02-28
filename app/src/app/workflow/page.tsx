@@ -1336,7 +1336,7 @@ function WorkflowPageInner() {
 
   function injectRiskIntoExecSummary(combined: string, riskSummary: string): string {
     // Section 2 시작 직전에 리스크 요약 삽입 (Section 1 끝)
-    const sec2Pattern = /\n(## \**2[.．])/;
+    const sec2Pattern = /\n(#{2,3} \**2(?:[.．:：)\]]|\s+(?=[가-힣A-Z])))/;
     const sec2Match = combined.match(sec2Pattern);
     if (!sec2Match || sec2Match.index === undefined) return combined;
     const insertPos = sec2Match.index;
@@ -1359,7 +1359,7 @@ function WorkflowPageInner() {
   function validateDraftSections(content: string): string {
     const found: number[] = [];
     for (let i = 1; i <= 10; i++) {
-      const pattern = new RegExp(`##\\s+\\**${i}[.．]`);
+      const pattern = new RegExp(`#{2,3}\\s+\\**${i}(?:[.．:：)\\)]|\\s+(?=[가-힣A-Z]))(?![0-9])`);
       if (pattern.test(content)) found.push(i);
     }
     if (found.length < 7) {
@@ -1374,10 +1374,10 @@ function WorkflowPageInner() {
   function validateFullPlanSections(content: string): string {
     const missing: string[] = [];
     for (let i = 1; i <= 13; i++) {
-      const pattern = new RegExp(`##\\s+\\**${i}[.．](?![0-9])`);
+      const pattern = new RegExp(`#{2,3}\\s+\\**${i}(?:[.．:：)\\)]|\\s+(?=[가-힣A-Z]))(?![0-9])`);
       if (!pattern.test(content)) missing.push(`섹션 ${i}`);
     }
-    if (!/##\s+\**참고문헌/.test(content)) missing.push('참고문헌');
+    if (!/#{2,3}\s+\**참고문헌/.test(content)) missing.push('참고문헌');
     if (missing.length > 0) {
       const warning = `> ⚠️ **섹션 누락 경고**: 다음 섹션이 생성되지 않았습니다: ${missing.join(', ')}. AI 모델의 출력 한도로 인해 내용이 잘렸을 수 있습니다.\n\n`;
       return warning + content;
@@ -1455,30 +1455,71 @@ function WorkflowPageInner() {
       return content;
     }
 
+    // 재시도 + 부분 실패 허용 래퍼: 사용자 중지는 즉시 re-throw, 그 외 1회 재시도 후 빈 문자열 반환
+    async function safeAgentFetch(
+      agentNum: number, agentLabel: string,
+      payload: Record<string, unknown>, retries = 1,
+    ): Promise<string> {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          return await agentFetch(agentNum, agentLabel, payload);
+        } catch (err) {
+          // 사용자 중지(AbortError)는 즉시 re-throw
+          if (err instanceof DOMException && err.name === 'AbortError') throw err;
+          if (attempt < retries) {
+            console.warn(`[에이전트 ${agentNum}] 재시도 (${attempt + 1}/${retries})`);
+            onAgentComplete(agentNum, `"${idea.name}" ${agentLabel} 재시도 중...`);
+            continue;
+          }
+          console.error(`[에이전트 ${agentNum}] 최종 실패:`, err);
+          onAgentComplete(agentNum, `"${idea.name}" ${agentLabel} 실패 ⚠️`);
+          return ''; // 빈 문자열 → 해당 섹션 생략
+        }
+      }
+      return '';
+    }
+
     const base = { preset: selectedPreset };
 
     // Agent 1: 시장·문제
     setLoadingMessage(`[에이전트 1/5] "${idea.name}" 시장·트렌드·TAM 분석 중...`);
-    const marketContent = await agentFetch(1, '시장·트렌드·TAM 분석', { ...base, type: 'full-plan-market', idea, searchResults: cappedSearch, existingPlanContent: existingCtx });
+    const marketContent = await safeAgentFetch(1, '시장·트렌드·TAM 분석', { ...base, type: 'full-plan-market', idea, searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(4 * agentEtaMs);
 
     // Agent 2: 경쟁·차별화
     setLoadingMessage(`[에이전트 2/5] "${idea.name}" 경쟁·차별화 분석 중...`);
-    const competitionContent = await agentFetch(2, '경쟁·차별화 분석', { ...base, type: 'full-plan-competition', idea, marketContent: cap(marketContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
+    const competitionContent = await safeAgentFetch(2, '경쟁·차별화 분석', { ...base, type: 'full-plan-competition', idea, marketContent: cap(marketContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(3 * agentEtaMs);
 
     // Agent 3: 전략·솔루션
     setLoadingMessage(`[에이전트 3/5] "${idea.name}" 전략·로드맵 수립 중...`);
-    const strategyContent = await agentFetch(3, '전략·로드맵 수립', { ...base, type: 'full-plan-strategy', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
+    const strategyContent = await safeAgentFetch(3, '전략·로드맵 수립', { ...base, type: 'full-plan-strategy', idea, marketContent: cap(marketContent), competitionContent: cap(competitionContent), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(2 * agentEtaMs);
 
     // Agent 4: 재무·리스크
     setLoadingMessage(`[에이전트 4/5] "${idea.name}" 재무·리스크 분석 중...`);
-    const financeContent = await agentFetch(4, '재무·리스크 분석', { ...base, type: 'full-plan-finance', idea, marketContent: cap(marketContent, 8000), competitionContent: cap(competitionContent, 8000), strategyContent: cap(strategyContent, 8000), searchResults: cappedSearch, existingPlanContent: existingCtx });
+    const financeContent = await safeAgentFetch(4, '재무·리스크 분석', { ...base, type: 'full-plan-finance', idea, marketContent: cap(marketContent, 8000), competitionContent: cap(competitionContent, 8000), strategyContent: cap(strategyContent, 8000), searchResults: cappedSearch, existingPlanContent: existingCtx });
     updateEta(1 * agentEtaMs);
 
+    // 전체 실패 감지: 4개 모두 실패 시에만 throw
+    const failedAgents = [
+      !marketContent && 1,
+      !competitionContent && 2,
+      !strategyContent && 3,
+      !financeContent && 4,
+    ].filter(Boolean) as number[];
+    if (failedAgents.length === 4) {
+      throw new Error('모든 에이전트가 실패했습니다.');
+    }
+
+    // 부분 실패 경고 메시지
+    const AGENT_LABELS: Record<number, string> = { 1: '시장·트렌드·TAM', 2: '경쟁·차별화', 3: '전략·로드맵', 4: '재무·리스크' };
+    const partialWarning = failedAgents.length > 0
+      ? `> ⚠️ **부분 생성 경고**: 에이전트 ${failedAgents.map(n => `${n}(${AGENT_LABELS[n]})`).join(', ')}이(가) 실패하여 해당 섹션이 누락되었습니다.\n\n`
+      : '';
+
     // 섹션 순서대로 조합
-    const combined = combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
+    const combined = partialWarning + combineFullPlanSections(idea.name, marketContent, competitionContent, strategyContent, financeContent);
 
     // Agent 5: Devil's Advocate (실패 시 combined 그대로 사용)
     let finalContent = combined;
@@ -1506,7 +1547,7 @@ function WorkflowPageInner() {
           mergedCombined = injectRiskIntoExecSummary(combined, riskSummary);
         }
         // 참고문헌 앞에 섹션 14 삽입
-        const refPattern = /\n(##\s+\**참고문헌)/;
+        const refPattern = /\n(#{2,3}\s+\**참고문헌)/;
         const refMatch = mergedCombined.match(refPattern);
         if (refMatch && refMatch.index !== undefined) {
           finalContent = mergedCombined.slice(0, refMatch.index).trimEnd() + '\n\n---\n\n' + section14 + '\n\n---\n' + mergedCombined.slice(refMatch.index);
@@ -1675,25 +1716,45 @@ function WorkflowPageInner() {
 
       let startIdx: number;
       if (sectionNum === '참고문헌') {
-        const m = normalized.match(/\n##\s+\**참고문헌/);
+        const m = normalized.match(/\n#{2,3}\s+\**참고문헌/);
         if (!m || m.index === undefined) return '';
         startIdx = m.index + 1;
       } else {
-        // "## 숫자." — 앞뒤에 다른 숫자가 없는 경우만 매칭 (예: 1은 10,11... 과 구분)
-        const pattern = new RegExp(`\n##\\s+\\**${sectionNum}[.．](?![0-9])`);
+        // H2/H3 + 마침표·콜론·괄호·공백 등 다양한 LLM 헤딩 변형 대응
+        // 예: "## 2. 트렌드" / "### **2:** 트렌드" / "## 2) 트렌드" / "## 2 트렌드"
+        const pattern = new RegExp(
+          `\n#{2,3}\\s+\\**${sectionNum}(?:[.．:：)\\)]|\\s+(?=[가-힣A-Z]))(?![0-9])`
+        );
         const m = normalized.match(pattern);
         if (!m || m.index === undefined) return '';
         startIdx = m.index + 1;
       }
 
-      // 다음 ## 섹션이 시작되는 위치 찾기
+      // 다음 ##/### 섹션이 시작되는 위치 찾기
       const rest = normalized.slice(startIdx + 1);
-      const nextMatch = rest.match(/\n##\s/);
+      const nextMatch = rest.match(/\n#{2,3}\s/);
       const endIdx = nextMatch?.index !== undefined
         ? startIdx + 1 + nextMatch.index
         : normalized.length;
 
       return normalized.slice(startIdx, endIdx).trim();
+    }
+
+    // 에이전트별 섹션 추출 + 누락 로깅
+    const agentSections: Record<string, { nums: (number | '참고문헌')[]; content: string }> = {
+      market:      { nums: [2, 3, 8],                   content: marketContent },
+      competition: { nums: [5, 6, 7],                   content: competitionContent },
+      strategy:    { nums: [1, 4, 9, 10],               content: strategyContent },
+      finance:     { nums: [11, 12, 13, '참고문헌'],    content: financeContent },
+    };
+    const missingByAgent: Record<string, (number | '참고문헌')[]> = {};
+    for (const [agent, { nums, content }] of Object.entries(agentSections)) {
+      const missing = nums.filter(n => !getSection(content, n));
+      if (missing.length > 0) missingByAgent[agent] = missing;
+    }
+    if (Object.keys(missingByAgent).length > 0) {
+      const parts = Object.entries(missingByAgent).map(([a, nums]) => `${a}: 섹션 ${nums.join(', ')}`);
+      console.warn(`[combineFullPlanSections] 누락: ${parts.join(' | ')}`);
     }
 
     const ordered = [

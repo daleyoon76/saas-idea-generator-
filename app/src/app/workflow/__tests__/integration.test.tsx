@@ -97,18 +97,20 @@ describe('Workflow Integration', () => {
     expect(input).toBeInTheDocument();
   });
 
-  it('shows provider selection with Claude enabled', async () => {
+  it('shows preset cards after providers load', async () => {
     render(<WorkflowPage />);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/Claude/i).length).toBeGreaterThanOrEqual(1);
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/providers'));
     });
+
+    expect(screen.getByText('AI 품질 모드 선택')).toBeInTheDocument();
   });
 
-  it('renders navigation bar with SaaS Idea Generator title', () => {
+  it('renders navigation bar with My CSO title', () => {
     render(<WorkflowPage />);
 
-    expect(screen.getByText('SaaS Idea Generator')).toBeInTheDocument();
+    expect(screen.getByText('My CSO')).toBeInTheDocument();
     expect(screen.getByText('홈으로')).toBeInTheDocument();
   });
 
@@ -123,10 +125,10 @@ describe('Workflow Integration', () => {
     expect(screen.getByText('완료')).toBeInTheDocument();
   });
 
-  it('shows AI model selector section', () => {
+  it('shows AI quality preset selector section', () => {
     render(<WorkflowPage />);
 
-    expect(screen.getByText('사용할 AI 모델 선택')).toBeInTheDocument();
+    expect(screen.getByText('AI 품질 모드 선택')).toBeInTheDocument();
   });
 
   it('shows keyword input heading and optional note', () => {
@@ -136,36 +138,22 @@ describe('Workflow Integration', () => {
     expect(screen.getByText(/특별히 원하는 키워드가 있으면/i)).toBeInTheDocument();
   });
 
-  it('renders all 4 provider cards', async () => {
+  it('renders 2 preset cards (기본/고품질)', () => {
     render(<WorkflowPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Ollama')).toBeInTheDocument();
-      expect(screen.getAllByText(/Claude/i).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Gemini')).toBeInTheDocument();
-      expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    });
+    expect(screen.getByText(/기본/)).toBeInTheDocument();
+    expect(screen.getByText(/고품질/)).toBeInTheDocument();
+    expect(screen.getByText('비용 효율 최적화')).toBeInTheDocument();
+    expect(screen.getByText('최고 품질 한국어')).toBeInTheDocument();
   });
 
-  it('shows spec badges (품질/속도/비용) for providers', () => {
-    render(<WorkflowPage />);
-
-    const qualityLabels = screen.getAllByText('품질');
-    const speedLabels = screen.getAllByText('속도');
-    const costLabels = screen.getAllByText('비용');
-
-    expect(qualityLabels.length).toBeGreaterThanOrEqual(4);
-    expect(speedLabels.length).toBeGreaterThanOrEqual(4);
-    expect(costLabels.length).toBeGreaterThanOrEqual(4);
-  });
-
-  it('can select a different provider', async () => {
+  it('can select a different preset', async () => {
     const user = userEvent.setup();
     render(<WorkflowPage />);
 
-    // Click Gemini provider card
-    const geminiCard = screen.getByText('Gemini');
-    await user.click(geminiCard);
+    // Click 고품질 preset card
+    const premiumCard = screen.getByText('최고 품질 한국어').closest('div[class]')!;
+    await user.click(premiumCard);
 
     // The generate button should still be present
     expect(screen.getByText(/아이디어 발굴 시작/i)).toBeInTheDocument();
@@ -182,11 +170,7 @@ describe('Workflow Integration', () => {
       );
     });
 
-    // Select Claude provider
-    const claudeButtons = screen.getAllByText(/Claude/i);
-    if (claudeButtons.length > 0) {
-      await user.click(claudeButtons[0]);
-    }
+    // Preset is already selected by default (no provider selection needed)
 
     // Type keyword and submit
     const input = screen.getByPlaceholderText(/AI, 헬스케어/i);
@@ -213,11 +197,7 @@ describe('Workflow Integration', () => {
       expect(mockFetch).toHaveBeenCalled();
     });
 
-    // Select Claude
-    const claudeButtons = screen.getAllByText(/Claude/i);
-    if (claudeButtons.length > 0) {
-      await user.click(claudeButtons[0]);
-    }
+    // Preset is already selected by default (no provider selection needed)
 
     // Type keyword and generate ideas
     const input = screen.getByPlaceholderText(/AI, 헬스케어/i);

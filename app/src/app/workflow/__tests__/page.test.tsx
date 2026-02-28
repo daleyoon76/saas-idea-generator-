@@ -44,15 +44,15 @@ mockFetch.mockResolvedValue({
 import WorkflowPage from '../page';
 
 describe('Workflow Page', () => {
-  it('renders the page with SaaS Idea Generator title', () => {
+  it('renders the page with My CSO title', () => {
     render(<WorkflowPage />);
-    expect(screen.getByText('SaaS Idea Generator')).toBeInTheDocument();
+    expect(screen.getByText('My CSO')).toBeInTheDocument();
   });
 
-  it('renders provider buttons', () => {
+  it('renders preset cards', () => {
     render(<WorkflowPage />);
-    // Provider labels should be visible
-    expect(screen.getAllByText(/Claude/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/기본/)).toBeInTheDocument();
+    expect(screen.getByText(/고품질/)).toBeInTheDocument();
   });
 
   it('renders the workflow UI', () => {

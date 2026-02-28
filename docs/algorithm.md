@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-28 (동적 쿼리 생성 + 캐싱 추가)
+> 마지막 업데이트: 2026-02-28 (에이전트 실패 복구 + 섹션 추출 강화)
 
 ---
 
@@ -464,15 +464,36 @@ injectRiskIntoExecSummary(combined, riskSummary)
 combined + section14 결합 → 최종 문서
 ```
 
+### 3-2a. 에이전트 실패 복구 (`safeAgentFetch`)
+
+에이전트 1-4 호출은 `safeAgentFetch()` 래퍼로 감싸져 있다.
+
+```
+agentFetch() 호출
+  ↓ 실패 시
+1회 재시도 (같은 payload)
+  ↓ 재실패 시
+빈 문자열('') 반환 → 해당 에이전트 섹션 생략
+```
+
+- **사용자 중지(AbortError)**: 즉시 re-throw (재시도 안 함)
+- **전체 실패**: 4개 에이전트 모두 빈 문자열이면 `throw Error('모든 에이전트가 실패했습니다.')`
+- **부분 실패**: 결과 문서 상단에 경고 배너 삽입: `> ⚠️ **부분 생성 경고**: 에이전트 N(역할)이(가) 실패하여 해당 섹션이 누락되었습니다.`
+
 ### 3-3. 섹션 조합 (`combineFullPlanSections`)
 
 각 에이전트 출력에서 정규식으로 섹션을 추출해 올바른 순서로 재조립한다.
 
 ```typescript
-// 섹션 마커 탐색: "\n## N." (볼드·변형 헤딩 대응)
-const pattern = new RegExp(`\n##\s+\**${sectionNum}[.．](?![0-9])`)
+// 섹션 마커 탐색: H2/H3 + 마침표·콜론·괄호·공백 등 LLM 변형 대응
+const pattern = new RegExp(
+  `\n#{2,3}\\s+\\**${sectionNum}(?:[.．:：)\\)]|\\s+(?=[가-힣A-Z]))(?![0-9])`
+)
 ```
 
+**대응하는 헤딩 변형**: `## 2. 제목` / `### **2:** 제목` / `## 2) 제목` / `## 2 제목` / `## 2：제목`
+
+- 에이전트별 누락 섹션을 콘솔에 로깅: `[combineFullPlanSections] 누락: market: 섹션 8 | finance: 섹션 13`
 - 7개 미만 섹션 추출 시 raw 조합 fallback (strategyContent → marketContent → competitionContent → financeContent 순서로 단순 연결)
 
 ### 3-4. UX 플로우

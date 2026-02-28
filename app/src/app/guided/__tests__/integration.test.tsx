@@ -125,12 +125,15 @@ describe('Guided Page Integration', () => {
     expect(screen.getByText(/질문 1 \/ 8/i)).toBeInTheDocument();
   });
 
-  it('shows provider selection', async () => {
+  it('shows preset selection', async () => {
     render(<GuidedPage />);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/Claude/i).length).toBeGreaterThanOrEqual(1);
+      expect(mockFetch).toHaveBeenCalled();
     });
+
+    // Compact preset button in nav
+    expect(screen.getByText(/모드/)).toBeInTheDocument();
   });
 
   it('shows back link to /start on step 1', () => {
@@ -292,42 +295,47 @@ describe('Guided Page Integration', () => {
     expect(screen.getByText(/경과 시간/i)).toBeInTheDocument();
   }, 30000);
 
-  it('shows provider panel toggle', async () => {
+  it('shows preset panel toggle with 기본/고품질 options', async () => {
     const user = userEvent.setup();
     render(<GuidedPage />);
 
-    // Click the compact provider button in nav
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalled();
     });
 
-    // The compact provider button contains the provider name
+    // The compact preset button in nav contains "모드"
     const navButtons = screen.getAllByRole('button');
-    const providerBtn = navButtons.find(btn => btn.textContent?.includes('Claude'))!;
-    await user.click(providerBtn);
+    const presetBtn = navButtons.find(btn => btn.textContent?.includes('모드'))!;
+    await user.click(presetBtn);
 
-    // Should show provider panel with all providers
+    // Should show preset panel with 기본/고품질
     await waitFor(() => {
-      expect(screen.getByText('Ollama')).toBeInTheDocument();
-      expect(screen.getByText('Gemini')).toBeInTheDocument();
-      expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      expect(screen.getByText('비용 효율 최적화')).toBeInTheDocument();
+      expect(screen.getByText('최고 품질 한국어')).toBeInTheDocument();
     });
   });
 
-  it('shows spec badges in provider panel', async () => {
+  it('can select a different preset from panel', async () => {
     const user = userEvent.setup();
     render(<GuidedPage />);
 
     await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
 
-    // The compact provider button contains the provider name
+    // Open preset panel
     const navButtons = screen.getAllByRole('button');
-    const providerBtn = navButtons.find(btn => btn.textContent?.includes('Claude'))!;
-    await user.click(providerBtn);
+    const presetBtn = navButtons.find(btn => btn.textContent?.includes('모드'))!;
+    await user.click(presetBtn);
 
+    // Click 고품질 card
     await waitFor(() => {
-      const qualityLabels = screen.getAllByText('품질');
-      expect(qualityLabels.length).toBeGreaterThanOrEqual(4);
+      expect(screen.getByText('최고 품질 한국어')).toBeInTheDocument();
+    });
+    const premiumCard = screen.getByText('최고 품질 한국어').closest('div[class]')!;
+    await user.click(premiumCard);
+
+    // Panel should close and button text should update
+    await waitFor(() => {
+      expect(screen.getByText(/고품질 모드/)).toBeInTheDocument();
     });
   });
 

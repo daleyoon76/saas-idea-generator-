@@ -30,9 +30,9 @@ describe('Guided Page', () => {
     expect(backLink).toBeTruthy();
   });
 
-  it('renders provider selection', () => {
+  it('renders preset selection button', () => {
     render(<GuidedPage />);
-    expect(screen.getAllByText(/Claude/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/모드/)).toBeInTheDocument();
   });
 
   it('renders guided step UI elements', () => {

@@ -122,8 +122,7 @@ beforeEach(() => {
 async function navigateToSelectIdeas(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => { expect(mockFetch).toHaveBeenCalled(); });
 
-  const claudeButtons = screen.getAllByText(/Claude/i);
-  if (claudeButtons.length > 0) await user.click(claudeButtons[0]);
+  // Preset is already selected by default (no provider selection needed)
 
   const input = screen.getByPlaceholderText(/AI, 헬스케어/i);
   await user.type(input, 'AI');
@@ -321,111 +320,44 @@ describe('Workflow Step: View Plan → PRD', () => {
     expect(screen.getByText('.docx 저장')).toBeInTheDocument();
   }, 25000);
 
-  it('shows .md save dialog from view-plan', async () => {
+  it('calls native save picker for .md save', async () => {
     const user = userEvent.setup();
+    const mockWritable = { write: vi.fn(), close: vi.fn() };
+    const mockShowSaveFilePicker = vi.fn().mockResolvedValue({ createWritable: () => mockWritable });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).showSaveFilePicker = mockShowSaveFilePicker;
+
     render(<WorkflowPage />);
     await navigateToViewPlan(user);
 
-    // Click .md save
     await user.click(screen.getByText('.md 저장'));
 
-    // Should show save dialog
     await waitFor(() => {
-      expect(screen.getByText(/마크다운\(.md\)으로 저장/)).toBeInTheDocument();
+      expect(mockShowSaveFilePicker).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('취소')).toBeInTheDocument();
-    expect(screen.getByText('저장')).toBeInTheDocument();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).showSaveFilePicker;
   }, 25000);
 
-  it('shows .docx save dialog from view-plan', async () => {
+  it('calls native save picker for .docx save', async () => {
     const user = userEvent.setup();
+    const mockWritable = { write: vi.fn(), close: vi.fn() };
+    const mockShowSaveFilePicker = vi.fn().mockResolvedValue({ createWritable: () => mockWritable });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).showSaveFilePicker = mockShowSaveFilePicker;
+
     render(<WorkflowPage />);
     await navigateToViewPlan(user);
 
-    // Click .docx save
     await user.click(screen.getByText('.docx 저장'));
 
-    // Should show save dialog
     await waitFor(() => {
-      expect(screen.getByText(/워드\(.docx\) 파일로 저장/)).toBeInTheDocument();
+      expect(mockShowSaveFilePicker).toHaveBeenCalled();
     });
 
-    // Should show filename
-    expect(screen.getByText(/사업기획서.*TestSaaS.*\.docx/)).toBeInTheDocument();
-  }, 25000);
-
-  it('can cancel save dialog', async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPage />);
-    await navigateToViewPlan(user);
-
-    // Open save dialog
-    await user.click(screen.getByText('.md 저장'));
-    await waitFor(() => {
-      expect(screen.getByText('취소')).toBeInTheDocument();
-    });
-
-    // Cancel
-    await user.click(screen.getByText('취소'));
-
-    // Dialog should close
-    await waitFor(() => {
-      expect(screen.queryByText(/마크다운\(.md\)으로 저장/)).not.toBeInTheDocument();
-    });
-  }, 25000);
-});
-
-describe('Workflow: Save Execution', () => {
-  it('can execute .md save from dialog', async () => {
-    const user = userEvent.setup();
-
-    // Mock URL.createObjectURL and revokeObjectURL for download
-    const mockCreateObjectURL = vi.fn(() => 'blob:mock');
-    const mockRevokeObjectURL = vi.fn();
-    vi.stubGlobal('URL', { ...URL, createObjectURL: mockCreateObjectURL, revokeObjectURL: mockRevokeObjectURL });
-
-    render(<WorkflowPage />);
-    await navigateToViewPlan(user);
-
-    // Open .md save dialog
-    await user.click(screen.getByText('.md 저장'));
-    await waitFor(() => {
-      expect(screen.getByText('저장')).toBeInTheDocument();
-    });
-
-    // Click save
-    await user.click(screen.getByText('저장'));
-
-    // Dialog should close
-    await waitFor(() => {
-      expect(screen.queryByText(/마크다운\(.md\)으로 저장/)).not.toBeInTheDocument();
-    });
-  }, 25000);
-
-  it('can execute .docx save from dialog', async () => {
-    const user = userEvent.setup();
-
-    const mockCreateObjectURL = vi.fn(() => 'blob:mock');
-    const mockRevokeObjectURL = vi.fn();
-    vi.stubGlobal('URL', { ...URL, createObjectURL: mockCreateObjectURL, revokeObjectURL: mockRevokeObjectURL });
-
-    render(<WorkflowPage />);
-    await navigateToViewPlan(user);
-
-    // Open .docx save dialog
-    await user.click(screen.getByText('.docx 저장'));
-    await waitFor(() => {
-      expect(screen.getByText('저장')).toBeInTheDocument();
-    });
-
-    // Click save
-    await user.click(screen.getByText('저장'));
-
-    // Dialog should close
-    await waitFor(() => {
-      expect(screen.queryByText(/워드\(.docx\) 파일로 저장/)).not.toBeInTheDocument();
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).showSaveFilePicker;
   }, 25000);
 });
 
