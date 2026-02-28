@@ -42,6 +42,8 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, Width
 import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
+import { parseChartJson } from '@/lib/chart-schema';
+import ChartRenderer from '@/components/ChartRenderer';
 
 /** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
 function sanitizeMermaidSyntax(src: string): string {
@@ -58,147 +60,18 @@ function sanitizeMermaidSyntax(src: string): string {
     .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
     .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
     // diagram type 선언 뒤 불필요한 세미콜론 제거 (flowchart TD; → flowchart TD)
-    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|quadrantChart|xychart-beta)\b[^;\n]*);/gm, '$1')
-    // 잘린 데이터 행 제거 (쉼표 뒤에 닫는 괄호 없이 끝나는 줄)
-    .replace(/^.*\[[\d\s.,eE+-]*,\s*$/gm, '')
+    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt)\b[^;\n]*);/gm, '$1')
     // trailing 빈 줄 정리
     .replace(/\n{3,}/g, '\n\n');
-
-  // quadrantChart 보정
-  if (/^\s*quadrantChart/m.test(result)) {
-    // 1a. 축 라벨 왼쪽 (-->앞): unquoted → 따옴표 감싸기
-    result = result.replace(
-      /^(\s*(?:x|y)-axis\s+)(?!")(.+?)(\s*-->)/gm,
-      (_, pre: string, label: string, arrow: string) => {
-        const t = label.trim();
-        return t ? `${pre}"${t}"${arrow}` : `${pre}${label}${arrow}`;
-      }
-    );
-    // 1b. 축 라벨 오른쪽 (-->뒤): unquoted → 따옴표 감싸기
-    result = result.replace(
-      /^(\s*(?:x|y)-axis\s+.+?-->\s*)(?!")([^"\n]+)$/gm,
-      (_, pre: string, label: string) => {
-        const t = label.trim();
-        return t ? `${pre}"${t}"` : `${pre}${label}`;
-      }
-    );
-    // 1c. 축 라벨 단일 (-->없음): unquoted → 따옴표 감싸기
-    result = result.replace(
-      /^(\s*(?:x|y)-axis\s+)(?!")([^"\n]+)$/gm,
-      (match, pre: string, label: string) => {
-        if (label.includes('-->')) return match;
-        const t = label.trim();
-        return t ? `${pre}"${t}"` : match;
-      }
-    );
-
-    // 2. 데이터 포인트 () → [] 소괄호를 대괄호로 변환
-    result = result.replace(
-      /:\s*\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\)/g,
-      ': [$1, $2]'
-    );
-
-    // 3. 데이터 포인트: unquoted 라벨을 따옴표로 감싸기
-    result = result.replace(
-      /^(\s*)(?!"|quadrantChart|title|x-axis|y-axis|quadrant-)([^":\n]+?)(\s*:\s*\[)/gm,
-      '$1"$2"$3'
-    );
-
-    // 4. 좌표 값이 0~1 범위를 벗어나면 자동 정규화
-    const dataRe = /:\s*\[(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\]/g;
-    const values: number[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = dataRe.exec(result)) !== null) {
-      values.push(parseFloat(m[1]), parseFloat(m[2]));
-    }
-    const maxVal = Math.max(...values, 1);
-    if (maxVal > 1) {
-      result = result.replace(dataRe, (_, x: string, y: string) => {
-        const nx = Math.min(parseFloat(x) / maxVal, 0.99).toFixed(2);
-        const ny = Math.min(parseFloat(y) / maxVal, 0.99).toFixed(2);
-        return `: [${nx}, ${ny}]`;
-      });
-    }
-  }
-
-  // xychart-beta 보정
-  if (/^\s*xychart-beta/m.test(result)) {
-    const lines = result.split('\n');
-    const fixed: string[] = [];
-    let xLen = 0; // x-axis 배열 항목 수
-
-    for (const line of lines) {
-      let l = line;
-
-      // x-axis 배열 항목에 따옴표 추가: [1월, 2월] → ["1월", "2월"]
-      const xMatch = l.match(/^(\s*x-axis\s+)\[(.+)\]\s*$/);
-      if (xMatch) {
-        const items = xMatch[2].split(',').map(s => {
-          const t = s.trim().replace(/^"|"$/g, '');
-          return `"${t}"`;
-        });
-        xLen = items.length;
-        l = `${xMatch[1]}[${items.join(', ')}]`;
-      }
-
-      // y-axis: "label" min --> max 형식에서 따옴표 보정
-      const yRangeMatch = l.match(/^(\s*y-axis\s+)(?!")([^"[\n]+?)(\s+\d)/);
-      if (yRangeMatch) {
-        l = `${yRangeMatch[1]}"${yRangeMatch[2].trim()}"${yRangeMatch[3]}`;
-      }
-
-      // bar / line 데이터 배열: 닫는 ] 없는 잘린 행 제거
-      const dataLineMatch = l.match(/^(\s*(?:bar|line)\s+)\[(.+)$/);
-      if (dataLineMatch && !l.includes(']')) {
-        continue; // 잘린 데이터 행 스킵
-      }
-
-      // bar / line 데이터 배열: x-axis 길이와 맞추기 (잘린 데이터 패딩)
-      if (xLen > 0) {
-        const barMatch = l.match(/^(\s*(?:bar|line)\s+)\[(.+)\]\s*$/);
-        if (barMatch) {
-          const nums = barMatch[2].split(',').map(s => s.trim()).filter(Boolean);
-          if (nums.length < xLen) {
-            while (nums.length < xLen) nums.push('0');
-            l = `${barMatch[1]}[${nums.join(', ')}]`;
-          } else if (nums.length > xLen) {
-            l = `${barMatch[1]}[${nums.slice(0, xLen).join(', ')}]`;
-          }
-        }
-      }
-
-      fixed.push(l);
-    }
-    result = fixed.join('\n');
-  }
 
   return result;
 }
 
-/** Render a mermaid chart to PNG for docx embedding. Returns null on failure. */
-async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+/** SVG 문자열 → PNG (Uint8Array) 변환. docx 임베딩용 공용 함수. */
+async function svgToPng(svgString: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
   try {
-    const sanitized = sanitizeMermaidSyntax(chart);
-    const m = await import('mermaid');
-    m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
-      primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
-      lineColor: '#8B3520', textColor: '#3D1E10',
-    }});
-    const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'absolute';
-    offscreen.style.left = '-99999px';
-    document.body.appendChild(offscreen);
-    let svg: string;
-    try {
-      ({ svg } = await m.default.render(id, sanitized, offscreen));
-    } finally {
-      offscreen.remove();
-    }
-
-    // Parse SVG to set explicit dimensions for Image loading
     const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgEl = svgDoc.querySelector('svg');
     if (!svgEl) return null;
 
@@ -215,7 +88,6 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
     svgEl.setAttribute('height', String(h));
     const fixedSvg = new XMLSerializer().serializeToString(svgEl);
 
-    // data URL 사용 — blob URL은 cross-origin으로 취급돼 canvas tainted 에러 발생
     const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fixedSvg)))}`;
 
     return new Promise((resolve) => {
@@ -241,6 +113,149 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
   } catch {
     return null;
   }
+}
+
+/** Render a mermaid chart to PNG for docx embedding. Returns null on failure. */
+async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+  try {
+    const sanitized = sanitizeMermaidSyntax(chart);
+    const m = await import('mermaid');
+    m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
+      primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
+      lineColor: '#8B3520', textColor: '#3D1E10',
+    }});
+    const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
+    const offscreen = document.createElement('div');
+    offscreen.style.position = 'absolute';
+    offscreen.style.left = '-99999px';
+    document.body.appendChild(offscreen);
+    let svg: string;
+    try {
+      ({ svg } = await m.default.render(id, sanitized, offscreen));
+    } finally {
+      offscreen.remove();
+    }
+    return svgToPng(svg);
+  } catch {
+    return null;
+  }
+}
+
+/** docx 전용 정적 SVG 생성 (Recharts 없이 순수 문자열 조립) */
+function renderChartSvg(chart: import('@/lib/chart-schema').ChartData): string {
+  const W = 600, H = 400;
+  const PAD = { top: 50, right: 30, bottom: 60, left: 70 };
+  const colors = [CANYON.accent, CANYON.amber, CANYON.textMid, CANYON.amberLight, CANYON.deepRed, CANYON.success];
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  let body = '';
+  const title = chart.title ? `<text x="${W / 2}" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="${CANYON.textDark}">${esc(chart.title)}</text>` : '';
+
+  if (chart.type === 'bar' || chart.type === 'line') {
+    const skip = new Set(['name', 'value', 'x', 'y']);
+    const seriesKeys: string[] = [];
+    for (const d of chart.data) {
+      for (const k of Object.keys(d)) {
+        if (!skip.has(k) && typeof d[k] === 'number' && !seriesKeys.includes(k)) seriesKeys.push(k);
+      }
+    }
+    if (seriesKeys.length === 0 && chart.data.some(d => d.value !== undefined)) seriesKeys.push('value');
+
+    let maxVal = 0;
+    for (const d of chart.data) for (const k of seriesKeys) { const v = Number(d[k] ?? 0); if (v > maxVal) maxVal = v; }
+    if (maxVal === 0) maxVal = 1;
+    const niceMax = Math.ceil(maxVal / Math.pow(10, Math.floor(Math.log10(maxVal)))) * Math.pow(10, Math.floor(Math.log10(maxVal)));
+
+    // y-axis grid + labels
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const y = PAD.top + plotH - (i / ticks) * plotH;
+      const val = Math.round((i / ticks) * niceMax);
+      body += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left + plotW}" y2="${y}" stroke="${CANYON.border}" stroke-dasharray="3 3"/>`;
+      body += `<text x="${PAD.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="${CANYON.textMid}">${val}</text>`;
+    }
+
+    const n = chart.data.length;
+    const groupW = plotW / n;
+
+    if (chart.type === 'bar') {
+      const barW = Math.max(8, (groupW * 0.7) / seriesKeys.length);
+      chart.data.forEach((d, i) => {
+        const cx = PAD.left + i * groupW + groupW / 2;
+        seriesKeys.forEach((k, si) => {
+          const v = Number(d[k] ?? 0);
+          const barH = (v / niceMax) * plotH;
+          const bx = cx - (seriesKeys.length * barW) / 2 + si * barW;
+          body += `<rect x="${bx}" y="${PAD.top + plotH - barH}" width="${barW}" height="${barH}" fill="${colors[si % colors.length]}" rx="2"/>`;
+        });
+        body += `<text x="${cx}" y="${PAD.top + plotH + 16}" text-anchor="middle" font-size="10" fill="${CANYON.textMid}">${esc(d.name)}</text>`;
+      });
+    } else {
+      // line
+      seriesKeys.forEach((k, si) => {
+        const pts = chart.data.map((d, i) => {
+          const x = PAD.left + i * groupW + groupW / 2;
+          const y = PAD.top + plotH - (Number(d[k] ?? 0) / niceMax) * plotH;
+          return `${x},${y}`;
+        });
+        body += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[si % colors.length]}" stroke-width="2"/>`;
+        chart.data.forEach((d, i) => {
+          const x = PAD.left + i * groupW + groupW / 2;
+          const y = PAD.top + plotH - (Number(d[k] ?? 0) / niceMax) * plotH;
+          body += `<circle cx="${x}" cy="${y}" r="3" fill="${colors[si % colors.length]}"/>`;
+        });
+      });
+      chart.data.forEach((d, i) => {
+        const cx = PAD.left + i * groupW + groupW / 2;
+        body += `<text x="${cx}" y="${PAD.top + plotH + 16}" text-anchor="middle" font-size="10" fill="${CANYON.textMid}">${esc(d.name)}</text>`;
+      });
+    }
+
+    if (chart.yLabel) body += `<text x="15" y="${PAD.top + plotH / 2}" text-anchor="middle" font-size="11" fill="${CANYON.textMid}" transform="rotate(-90 15 ${PAD.top + plotH / 2})">${esc(chart.yLabel)}</text>`;
+
+  } else if (chart.type === 'pie') {
+    const total = chart.data.reduce((s, d) => s + (d.value ?? 0), 0) || 1;
+    const cx = W / 2, cy = H / 2 + 10, r = 120;
+    let startAngle = -Math.PI / 2;
+    chart.data.forEach((d, i) => {
+      const slice = ((d.value ?? 0) / total) * 2 * Math.PI;
+      const endAngle = startAngle + slice;
+      const large = slice > Math.PI ? 1 : 0;
+      const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+      const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+      body += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${colors[i % colors.length]}"/>`;
+      const mid = startAngle + slice / 2;
+      const lx = cx + (r + 20) * Math.cos(mid), ly = cy + (r + 20) * Math.sin(mid);
+      const pct = Math.round(((d.value ?? 0) / total) * 100);
+      body += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="10" fill="${CANYON.textDark}">${esc(d.name)} ${pct}%</text>`;
+      startAngle = endAngle;
+    });
+
+  } else if (chart.type === 'scatter') {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const d of chart.data) {
+      if (d.x !== undefined) { minX = Math.min(minX, d.x); maxX = Math.max(maxX, d.x); }
+      if (d.y !== undefined) { minY = Math.min(minY, d.y); maxY = Math.max(maxY, d.y); }
+    }
+    if (!isFinite(minX)) { minX = 0; maxX = 1; }
+    if (!isFinite(minY)) { minY = 0; maxY = 1; }
+    const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+
+    chart.data.forEach((d, i) => {
+      const px = PAD.left + ((d.x ?? 0) - minX) / rangeX * plotW;
+      const py = PAD.top + plotH - ((d.y ?? 0) - minY) / rangeY * plotH;
+      body += `<circle cx="${px}" cy="${py}" r="6" fill="${colors[i % colors.length]}" opacity="0.8"/>`;
+      body += `<text x="${px}" y="${py - 10}" text-anchor="middle" font-size="10" fill="${CANYON.textDark}">${esc(d.name)}</text>`;
+    });
+
+    if (chart.xLabel) body += `<text x="${PAD.left + plotW / 2}" y="${H - 10}" text-anchor="middle" font-size="11" fill="${CANYON.textMid}">${esc(chart.xLabel)}</text>`;
+    if (chart.yLabel) body += `<text x="15" y="${PAD.top + plotH / 2}" text-anchor="middle" font-size="11" fill="${CANYON.textMid}" transform="rotate(-90 15 ${PAD.top + plotH / 2})">${esc(chart.yLabel)}</text>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="white"/>${title}${body}</svg>`;
 }
 
 function MermaidDiagram({ chart }: { chart: string }) {
@@ -954,11 +969,28 @@ function WorkflowPageInner() {
         }
         if (i < lines.length) i++; // skip closing ```
 
-        if (lang === 'mermaid') {
+        if (lang === 'chart') {
+          // chart JSON → 정적 SVG → PNG 임베딩
+          const chartData = parseChartJson(blockLines.join('\n'));
+          if (chartData) {
+            const svgStr = renderChartSvg(chartData);
+            const img = await svgToPng(svgStr);
+            if (img) {
+              const maxW = 560;
+              const scale = Math.min(1, maxW / img.width);
+              const finalW = Math.round(img.width * scale);
+              const finalH = Math.round(img.height * scale);
+              children.push(new Paragraph({
+                children: [new ImageRun({ data: img.data, transformation: { width: finalW, height: finalH }, type: 'png' })],
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200, after: 200 },
+              }));
+            }
+          }
+        } else if (lang === 'mermaid') {
           const chart = blockLines.join('\n');
           const img = await renderMermaidToPng(chart);
           if (img) {
-            // 페이지 폭(A4 ~468pt ≈ 580px)에 맞게 축소
             const maxW = 560;
             const scale = Math.min(1, maxW / img.width);
             const finalW = Math.round(img.width * scale);
@@ -969,7 +1001,6 @@ function WorkflowPageInner() {
               spacing: { before: 200, after: 200 },
             }));
           } else {
-            // Mermaid 렌더 실패 시 코드 블록으로 표시
             for (const codeLine of blockLines) {
               children.push(new Paragraph({
                 children: [new TextRun({ text: codeLine, size: 18, color: DC.textMid, font: { name: 'Consolas', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
@@ -2241,9 +2272,11 @@ function WorkflowPageInner() {
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      if (/language-mermaid/.test(className || '')) {
-                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
-                      }
+                      const raw = String(children).replace(/\n$/, '');
+                      if (/language-chart/.test(className || ''))
+                        return <ChartRenderer json={raw} />;
+                      if (/language-mermaid/.test(className || ''))
+                        return <MermaidDiagram chart={raw} />;
                       return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
                     },
                   }}
@@ -2444,9 +2477,11 @@ function WorkflowPageInner() {
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      if (/language-mermaid/.test(className || '')) {
-                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
-                      }
+                      const raw = String(children).replace(/\n$/, '');
+                      if (/language-chart/.test(className || ''))
+                        return <ChartRenderer json={raw} />;
+                      if (/language-mermaid/.test(className || ''))
+                        return <MermaidDiagram chart={raw} />;
                       return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
                     },
                   }}
@@ -2551,9 +2586,11 @@ function WorkflowPageInner() {
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
                     pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
                     code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      if (/language-mermaid/.test(className || '')) {
-                        return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
-                      }
+                      const raw = String(children).replace(/\n$/, '');
+                      if (/language-chart/.test(className || ''))
+                        return <ChartRenderer json={raw} />;
+                      if (/language-mermaid/.test(className || ''))
+                        return <MermaidDiagram chart={raw} />;
                       return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
                     },
                   }}>{sanitizeMarkdown(prds[currentPRDIndex].content)}</ReactMarkdown>

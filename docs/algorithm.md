@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-27
+> 마지막 업데이트: 2026-02-28
 
 ---
 
@@ -484,6 +484,45 @@ LLM 호출 (maxTokens: 16000)
 
 ---
 
+## 차트 렌더링
+
+LLM 출력에서 데이터 시각화(차트)와 프로세스 흐름도를 구분하여 처리한다.
+
+### 데이터 차트 → JSON + Recharts
+
+LLM은 데이터 차트를 ` ```chart ` 코드 블록 안에 JSON으로 출력한다.
+
+**지원 타입**: `bar`, `line`, `pie`, `scatter`
+
+```json
+{
+  "type": "bar",
+  "title": "연도별 매출",
+  "xLabel": "연도",
+  "yLabel": "매출(억원)",
+  "data": [{"name": "2024", "매출": 500, "비용": 200}]
+}
+```
+
+**렌더링 파이프라인**:
+
+| 컨텍스트 | 처리 |
+|---------|------|
+| 웹 UI | `parseChartJson()` → `<ChartRenderer>` (Recharts) |
+| docx 내보내기 | `parseChartJson()` → `renderChartSvg()` (정적 SVG) → `svgToPng()` → ImageRun |
+
+- 스키마: `app/src/lib/chart-schema.ts` (ChartData 타입 + parseChartJson)
+- 렌더러: `app/src/components/ChartRenderer.tsx` (Recharts, CANYON 팔레트 6색)
+- docx SVG: `renderChartSvg()` (workflow/page.tsx 내, 600×400 고정)
+- 파싱 실패 시: 크림 배경 경고 + 원본 데이터 접기 표시
+
+### 프로세스 흐름도 → Mermaid (기존 유지)
+
+프로세스 흐름도는 기존 ` ```mermaid ` 코드 블록 + `flowchart` 구문을 유지한다.
+`sanitizeMermaidSyntax()`로 유니코드 화살표·스마트 따옴표 등 정규화 후 Mermaid 렌더링.
+
+---
+
 ## 저장 기능
 
 | 포맷 | 파일명 규칙 |
@@ -513,5 +552,7 @@ LLM 호출 (maxTokens: 16000)
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (아이디어·초안·PRD·풀버전 에이전트 5종) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |
+| `app/src/lib/chart-schema.ts` | 차트 JSON 스키마 + 파서 |
+| `app/src/components/ChartRenderer.tsx` | Recharts 기반 차트 렌더러 (bar/line/pie/scatter) |
 | `app/src/assets/criteria.md` | 아이디어 발굴 기준 — **단일 소스** (R10, 수정 시 자동 반영) |
 | `docs/bizplan-template.md` | 사업기획서 섹션 구조 — **단일 소스** (수정 시 자동 반영) |
