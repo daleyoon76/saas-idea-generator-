@@ -64,11 +64,30 @@ function sanitizeMermaidSyntax(src: string): string {
     // trailing 빈 줄 정리
     .replace(/\n{3,}/g, '\n\n');
 
-  // 노드 라벨 안의 리터럴 \n → <br/> (Mermaid 줄바꿈)
-  // ["텍스트\n줄2"], ("텍스트\n줄2"), (["텍스트\n줄2"]) 등
-  result = result.replace(/([\["(\[{>])([^\]")\n}]*?\\n[^\]")\n}]*?)([\]")\]}])/g, (m, open, body, close) =>
-    `${open}${body.replace(/\\n/g, '<br/>')}${close}`
-  );
+  // 리터럴 \n → <br/> (Mermaid 줄바꿈). 실제 개행(\n 문자)과 구별됨.
+  result = result.replace(/\\n/g, '<br/>');
+
+  // 긴 노드 라벨에 자동 줄바꿈 삽입 (각 줄이 13자 초과 시, 재귀)
+  const MAX_LINE = 13;
+  function breakLongSegment(seg: string): string {
+    seg = seg.trim();
+    if (seg.length <= MAX_LINE) return seg;
+    const mid = Math.floor(seg.length / 2);
+    let breakIdx = -1;
+    for (let d = 0; d <= mid; d++) {
+      if (mid + d < seg.length && /[\s,·:;→+]/.test(seg[mid + d])) { breakIdx = mid + d; break; }
+      if (mid - d >= 0 && /[\s,·:;→+]/.test(seg[mid - d])) { breakIdx = mid - d; break; }
+    }
+    if (breakIdx <= 0) return seg;
+    const left = seg.slice(0, breakIdx + 1).trimEnd();
+    const right = breakLongSegment(seg.slice(breakIdx + 1));
+    return left + '<br/>' + right;
+  }
+  result = result.replace(/(["[\]({])([^"|\]\)}\n]{10,}?)(["|\]\)}])/g, (_, open, body, close) => {
+    const segments = body.split('<br/>');
+    const broken = segments.map((s: string) => breakLongSegment(s.trim()));
+    return `${open}${broken.join('<br/>')}${close}`;
+  });
 
   return result;
 }
@@ -126,9 +145,10 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
   try {
     const sanitized = sanitizeMermaidSyntax(chart);
     const m = await import('mermaid');
-    m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
-      primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
-      lineColor: '#8B3520', textColor: '#3D1E10',
+    m.default.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
+      themeVariables: {
+        primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
+        lineColor: '#8B3520', textColor: '#3D1E10',
     }});
     const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
     const offscreen = document.createElement('div');
@@ -282,9 +302,10 @@ function MermaidDiagram({ chart }: { chart: string }) {
     document.body.appendChild(offscreen);
 
     import('mermaid').then((m) => {
-      m.default.initialize({ startOnLoad: false, theme: 'base', themeVariables: {
-        primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
-        lineColor: '#8B3520', textColor: '#3D1E10',
+      m.default.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
+        themeVariables: {
+          primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
+          lineColor: '#8B3520', textColor: '#3D1E10',
       }});
       m.default.render(id, cleaned, offscreen)
         .then(({ svg: renderedSvg }) => { if (!cancelled) setSvg(renderedSvg); })
@@ -368,6 +389,7 @@ function WorkflowPageInner() {
   const expectedEndRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pickerActiveRef = useRef(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<BusinessPlan | null>(null);
   const [pendingPlanType, setPendingPlanType] = useState<'bizplan' | 'prd'>('bizplan');
@@ -1153,6 +1175,8 @@ function WorkflowPageInner() {
   async function pickSaveFolder() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (typeof (window as any).showDirectoryPicker !== 'function') return;
+    if (pickerActiveRef.current) return;
+    pickerActiveRef.current = true;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
@@ -1165,8 +1189,11 @@ function WorkflowPageInner() {
         const resolved = await resolveUniqueFileName(handle, base, ext);
         setResolvedFileName(resolved);
       }
-    } catch (e: unknown) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+    } catch {
+      // NotAllowedError 등 → 폴더 선택 불가 환경 (Cursor 내장 브라우저 등)
+      // 폴더 없이 저장 버튼만으로 다운로드 가능
+    } finally {
+      pickerActiveRef.current = false;
     }
   }
 
@@ -1187,16 +1214,23 @@ function WorkflowPageInner() {
 
   async function executeSave() {
     if (!pendingPlan) return;
+    if (pickerActiveRef.current) return;
     setShowSaveDialog(false);
 
     const base = getSaveBaseName(pendingPlan, pendingPlanType);
     const ext = pendingFileFormat === 'md' ? '.md' : '.docx';
 
     let blob: Blob;
-    if (pendingFileFormat === 'md') {
-      blob = new Blob([pendingPlan.content], { type: 'text/markdown;charset=utf-8' });
-    } else {
-      blob = await buildDocxBlob(pendingPlan);
+    try {
+      if (pendingFileFormat === 'md') {
+        blob = new Blob([pendingPlan.content], { type: 'text/markdown;charset=utf-8' });
+      } else {
+        blob = await buildDocxBlob(pendingPlan);
+      }
+    } catch (err) {
+      console.error('[docx 저장 실패]', err);
+      alert('문서 생성 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
+      return;
     }
 
     // 폴더가 선택되어 있으면 → 해당 폴더에 직접 저장
@@ -1216,10 +1250,11 @@ function WorkflowPageInner() {
       }
     }
 
-    // 폴더 미선택 → 네이티브 Save As 다이얼로그
+    // 폴더 미선택 → 네이티브 Save As 또는 브라우저 다운로드
     const fileName = `${base}${ext}`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof (window as any).showSaveFilePicker === 'function') {
+    if (typeof (window as any).showSaveFilePicker === 'function' && !pickerActiveRef.current) {
+      pickerActiveRef.current = true;
       try {
         const mimeType = pendingFileFormat === 'md' ? 'text/markdown' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1233,6 +1268,9 @@ function WorkflowPageInner() {
         return;
       } catch (e: unknown) {
         if (e instanceof DOMException && e.name === 'AbortError') return;
+        // NotAllowedError 등 → triggerBrowserDownload 폴백
+      } finally {
+        pickerActiveRef.current = false;
       }
     }
 
@@ -2748,7 +2786,7 @@ function WorkflowPageInner() {
               <div className="text-xs mb-1" style={{ color: C.textLight }}>저장 폴더</div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 text-sm px-3 py-2 rounded-lg truncate" style={{ backgroundColor: saveDirHandle ? '#E8F5E9' : '#f5f5f5', color: saveDirHandle ? C.textDark : C.textLight }}>
-                  {saveDirHandle ? `/${saveDirName}` : '폴더를 선택하세요'}
+                  {saveDirHandle ? `/${saveDirName}` : '선택 없이 저장 시 다운로드'}
                 </div>
                 {typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function' && (
                   <button onClick={pickSaveFolder} className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
