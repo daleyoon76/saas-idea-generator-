@@ -351,7 +351,7 @@ createBusinessPlanPrompt(idea, searchResults, template)
 LLM 호출 (maxTokens: 16000)
 ```
 
-**출력 섹션** (`docs/bizplan-template.md` 기준):
+**출력 섹션** (`docs/bizplan-template.md` 기준, 10개 섹션):
 
 | 번호 | 섹션 |
 |------|------|
@@ -361,14 +361,13 @@ LLM 호출 (maxTokens: 16000)
 | 4 | 솔루션 (Solution) |
 | 5 | 경쟁 분석 (Competitive Analysis) |
 | 6 | 차별화 (Differentiator) |
-| 7 | 플랫폼 전략 (Platform Strategy) [선택] |
-| 8 | 시장 정의·규모 (Market Definition & TAM) |
-| 9 | 로드맵 (Roadmap) |
-| 10 | 상세 프로젝트 계획 (Detail Project Plan) [선택] |
-| 11 | 사업 모델 (Business Model) |
-| 12 | 사업 전망 (Business Forecast) |
-| 13 | 리스크 분석 (Risk Analysis) |
+| 7 | 시장 정의·규모 (Market Definition & TAM) |
+| 8 | 사업 모델 (Business Model) |
+| 9 | 사업 전망 (Business Forecast) |
+| 10 | 리스크 분석 (Risk Analysis) |
 | - | 참고문헌 (References) |
+
+> 풀버전(단계 3)에서는 플랫폼 전략(7), 로드맵(9), 상세 프로젝트 계획(10), 현실 검증(14)이 추가된 13+14 섹션 구조를 사용한다.
 
 ---
 

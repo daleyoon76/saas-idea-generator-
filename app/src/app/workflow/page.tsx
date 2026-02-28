@@ -1299,15 +1299,15 @@ function WorkflowPageInner() {
     return content;
   }
 
-  /** 초안 기획서(business-plan) 섹션 완성도 검증: ## 1. ~ ## 13. 최소 10개 */
+  /** 초안 기획서(business-plan) 섹션 완성도 검증: ## 1. ~ ## 10. 최소 7개 */
   function validateDraftSections(content: string): string {
     const found: number[] = [];
-    for (let i = 1; i <= 13; i++) {
+    for (let i = 1; i <= 10; i++) {
       const pattern = new RegExp(`##\\s+\\**${i}[.．]`);
       if (pattern.test(content)) found.push(i);
     }
-    if (found.length < 10) {
-      const missing = Array.from({ length: 13 }, (_, i) => i + 1).filter(n => !found.includes(n));
+    if (found.length < 7) {
+      const missing = Array.from({ length: 10 }, (_, i) => i + 1).filter(n => !found.includes(n));
       const warning = `> ⚠️ **섹션 누락 경고**: 다음 섹션이 생성되지 않았습니다: ${missing.map(n => `섹션 ${n}`).join(', ')}. AI 모델의 출력 한도로 인해 내용이 잘렸을 수 있습니다.\n\n`;
       return warning + content;
     }
