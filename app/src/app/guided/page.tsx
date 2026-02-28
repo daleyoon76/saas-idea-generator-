@@ -118,6 +118,49 @@ export default function GuidedPage() {
     });
   }
 
+  /** LLM으로 동적 검색 쿼리 생성 (실패 시 fallbackQueries로 폴백) */
+  async function generateSearchQueries(
+    kw: string,
+    context: 'idea-generation' | 'business-plan',
+    fallbackQueries: string[],
+    queryCount?: number,
+    idea?: Idea,
+  ): Promise<string[]> {
+    const count = queryCount || fallbackQueries.length;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preset: selectedPreset,
+          type: 'generate-queries',
+          keyword: kw,
+          queryContext: context,
+          queryCount: count,
+          ideaName: idea?.name,
+          ideaTarget: idea?.target,
+          ideaCategory: idea?.category,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('generate-queries API 실패');
+      const data = await res.json();
+      const text: string = data.response || '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('JSON 배열 미발견');
+      const queries = JSON.parse(jsonMatch[0]) as string[];
+      if (!Array.isArray(queries) || queries.length === 0) throw new Error('빈 배열');
+      console.log(`[generate-queries] ${context}: ${queries.length}개 동적 쿼리 생성`);
+      return queries.slice(0, count + 2);
+    } catch (err) {
+      console.warn('[generate-queries] 폴백 사용:', err instanceof Error ? err.message : err);
+      return fallbackQueries;
+    }
+  }
+
   // ── 타이머 ──────────────────────────────────────────────
   function startTimer() {
     processStartRef.current = Date.now();
@@ -172,17 +215,19 @@ export default function GuidedPage() {
     try {
       const idea = buildIdea(overrideAnswers);
 
-      // 1) 시장 조사
+      // 1) 시장 조사 (동적 쿼리 생성 → Tavily 검색)
       setLoadingMessage(`"${idea.name}" 관련 시장 조사 중...`);
       let planSearchResults: SearchResult[] = [];
       try {
-        planSearchResults = await searchMultiple([
+        const guidedFallback = [
           `${idea.name} 경쟁사 대안 솔루션 비교`,
           `${idea.target} 고객 페인포인트 문제점 수요`,
           `${idea.category || 'SaaS'} 시장 규모 TAM SAM SOM 투자 트렌드 2025`,
           `${idea.name} SaaS 가격 책정 수익 모델 사례`,
           `${idea.name} 규제 법률 리스크 진입 장벽`,
-        ]);
+        ];
+        const guidedQueries = await generateSearchQueries(idea.name, 'business-plan', guidedFallback, 5, idea);
+        planSearchResults = await searchMultiple(guidedQueries);
       } catch {}
       setProgressCurrent(1);
       setCompletedSteps([`시장 자료 ${planSearchResults.length}건 수집 완료`]);

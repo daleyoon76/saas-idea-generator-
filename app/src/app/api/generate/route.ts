@@ -104,6 +104,58 @@ function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: S
   return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults);
 }
 
+// --- 동적 검색 쿼리 생성 프롬프트 ---
+
+function buildSearchQueryPrompt(keyword: string, context: 'idea-generation' | 'business-plan', queryCount: number, ideaName?: string, ideaTarget?: string, ideaCategory?: string): string {
+  const subject = ideaName || keyword || 'SaaS AI 서비스';
+
+  if (context === 'idea-generation') {
+    return `당신은 SaaS 시장 조사 전문가입니다.
+사용자가 "${keyword || 'SaaS AI 에이전트'}" 키워드로 SaaS 아이디어를 발굴하려 합니다.
+
+아래 관점을 골고루 커버하는 인터넷 검색 쿼리 ${queryCount}개를 JSON 배열로 생성하세요:
+- 시장 규모·성장률·트렌드 (예: TAM, CAGR)
+- 기존 솔루션·경쟁 서비스 현황
+- 고객 페인포인트·미충족 수요
+- AI/자동화 기술 적용 사례
+- 투자 동향·스타트업 생태계
+
+규칙:
+1. 한국어와 영문 기술 용어를 자연스럽게 혼용 (예: "AI 에이전트 SaaS market size 2025")
+2. 각 쿼리는 구체적이고 검색 엔진에 최적화된 형태
+3. 중복되지 않는 다양한 각도의 쿼리
+4. 연도는 2025를 포함
+
+JSON 배열만 출력하세요. 설명 없이.
+예: ["쿼리1", "쿼리2", "쿼리3"]`;
+  }
+
+  // business-plan context
+  return `당신은 SaaS 사업기획서 작성을 위한 시장 조사 전문가입니다.
+"${subject}" 서비스의 사업기획서를 작성하기 위한 인터넷 검색 쿼리 ${queryCount}개를 JSON 배열로 생성하세요.
+
+서비스 정보:
+- 서비스명: ${ideaName || '미정'}
+- 타깃 고객: ${ideaTarget || '미정'}
+- 카테고리: ${ideaCategory || 'SaaS'}
+
+아래 관점을 골고루 커버하세요:
+- 경쟁사·대안 솔루션 비교 분석
+- 타깃 고객의 페인포인트·미충족 수요
+- 시장 규모 (TAM/SAM/SOM)·투자 트렌드
+- 가격 책정·수익 모델 사례
+- 규제·법률·리스크·진입 장벽
+
+규칙:
+1. 한국어와 영문 기술 용어를 자연스럽게 혼용
+2. 각 쿼리는 구체적이고 검색 엔진에 최적화된 형태
+3. 중복되지 않는 다양한 각도의 쿼리
+4. 연도는 2025를 포함
+
+JSON 배열만 출력하세요. 설명 없이.
+예: ["쿼리1", "쿼리2", "쿼리3", "쿼리4", "쿼리5"]`;
+}
+
 // --- 프리셋 → 모델 해석 ---
 
 function isProviderAvailable(provider: AIProvider): boolean {
@@ -158,7 +210,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { preset, provider: directProvider, model: directModel, prompt: rawPrompt, type, idea, searchResults } = body;
 
-    const jsonMode = type === 'json' || type === 'generate-ideas';
+    const jsonMode = type === 'json' || type === 'generate-ideas' || type === 'generate-queries';
 
     // 아이디어 생성 요청: 서버에서 criteria.md 읽어 프롬프트 생성
     // 사업기획서 요청: 서버에서 bizplan-template.md 읽어 프롬프트 생성
@@ -171,6 +223,16 @@ export async function POST(request: NextRequest) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
     } else if (type === 'generate-prd' && idea) {
       prompt = buildPRDPrompt(idea as Idea, body.businessPlanContent as string || '');
+    } else if (type === 'generate-queries') {
+      const { keyword: kw, queryContext, queryCount, ideaName, ideaTarget, ideaCategory } = body;
+      prompt = buildSearchQueryPrompt(
+        kw as string || '',
+        (queryContext as 'idea-generation' | 'business-plan') || 'idea-generation',
+        (queryCount as number) || 5,
+        ideaName as string | undefined,
+        ideaTarget as string | undefined,
+        ideaCategory as string | undefined,
+      );
     } else if (type === 'extract-idea') {
       const rawPlanContent = body.planContent as string;
       if (!rawPlanContent || typeof rawPlanContent !== 'string') {
@@ -217,6 +279,7 @@ export async function POST(request: NextRequest) {
       'full-plan-devil':       18000,
       'generate-prd':          15000,
       'extract-idea':          4000,
+      'generate-queries':      2000,
     };
     const maxTokens = TOKEN_LIMITS[type] ?? 9000;
     let result: LLMResult;

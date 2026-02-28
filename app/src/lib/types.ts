@@ -159,6 +159,7 @@ export const MODULE_PRESETS: Record<QualityPreset, Record<string, PresetModelCon
     'full-plan-devil':       [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
     'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },         { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-sonnet-4-6' }],
     'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },    { provider: 'gemini', model: 'gemini-2.5-flash-lite' }, { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'generate-queries':      [{ provider: 'openai', model: 'gpt-4.1-nano' },    { provider: 'gemini', model: 'gemini-2.5-flash-lite' }, { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
   },
   premium: {
     // 아이디어 발굴: 창의성 + 4개 소스 통합 → GPT-5 primary
@@ -179,6 +180,8 @@ export const MODULE_PRESETS: Record<QualityPreset, Record<string, PresetModelCon
     'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },          { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
     // 추출: 단순 태스크 → GPT-4.1 Nano
     'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },     { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    // 검색 쿼리 생성: 단순 구조화 → 빠르고 저렴한 모델
+    'generate-queries':      [{ provider: 'openai', model: 'gpt-4.1-mini' },     { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
   },
 };
 

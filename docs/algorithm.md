@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-28
+> 마지막 업데이트: 2026-02-28 (동적 쿼리 생성 + 캐싱 추가)
 
 ---
 
@@ -65,6 +65,7 @@ title: "알고리즘"
 | `full-plan-finance` | `createFullPlanFinancePrompt()` 직접 호출 | `idea`, `marketContent`, `competitionContent`, `strategyContent`, `searchResults`, `existingPlanContent?` |
 | `full-plan-devil` | `createFullPlanDevilPrompt()` 직접 호출 | `idea`, `fullPlanContent`, `searchResults`, `existingPlanContent?` |
 | `extract-idea` | `createIdeaExtractionPrompt()` 직접 호출 | `planContent` |
+| `generate-queries` | `buildSearchQueryPrompt()` 직접 호출 (jsonMode) | `keyword`, `queryContext`, `queryCount`, `ideaName?`, `ideaTarget?`, `ideaCategory?` |
 | (기타) | `prompt` 필드를 그대로 LLM에 전달 | `prompt` |
 
 - `business-plan`, `generate-prd`, `full-plan-*` → `maxTokens: 16000`
@@ -158,11 +159,26 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 
 네 가지 소스를 **동시에** 실행한다.
 
-#### 1-1-A. Tavily 시장 조사 (`/api/search`)
+#### 1-1-A. Tavily 시장 조사 (`/api/search`) — 동적 쿼리 생성
 
-병렬 3개 쿼리 동시 실행 후 URL 기준 중복 제거:
+LLM이 키워드 맥락에 맞는 검색 쿼리 3개를 동적 생성한 후, 병렬 실행 후 URL 기준 중복 제거.
 
-| # | 쿼리 | 목적 |
+**동적 쿼리 생성** (`/api/generate`, `type: 'generate-queries'`):
+
+```
+클라이언트: { type: 'generate-queries', keyword, queryContext: 'idea-generation', queryCount: 3 }
+    ↓
+서버: buildSearchQueryPrompt() → 시장규모/트렌드/경쟁/기술/투자 5개 관점 커버 지시
+    ↓
+LLM 호출 (jsonMode: true, maxTokens: 2000, 8초 타임아웃)
+    ↓
+JSON 배열 파싱 → 검색 쿼리 3개 반환
+```
+
+- LLM 쿼리 생성은 Reddit/Trends/Product Hunt 수집과 **병렬 실행** (레이턴시 최소화)
+- LLM 실패 시 하드코딩 폴백 쿼리 사용:
+
+| # | 폴백 쿼리 | 목적 |
 |---|------|------|
 | 1 | `{키워드} SaaS 시장 규모 성장률 트렌드 2025` | 시장 규모·성장률 데이터 확보 |
 | 2 | `{키워드} B2B B2C 솔루션 스타트업 투자 기회` | 스타트업 생태계·투자 동향 |
@@ -172,6 +188,13 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 - 쿼리당 최대 4개, 중복 제거 후 최대 12개
 - 검색 깊이: `basic`
 - 실패해도 다음 단계 계속 진행
+
+**검색 결과 캐싱** (`/api/search`):
+- 모듈 레벨 `Map<string, CacheEntry>` — Next.js 서버 프로세스 수명 동안 유지
+- 캐시 키: `query.toLowerCase().trim() + "|" + count + "|" + depth`
+- TTL: 24시간, 최대 500건, lazy cleanup (1시간 간격)
+- 동일 키워드로 초안→풀버전 생성 시 Tavily API 중복 호출 방지
+- 에러 응답은 캐싱하지 않음
 
 #### 1-1-B. Reddit 페인포인트 수집 (`/api/reddit`)
 
@@ -321,11 +344,27 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 
 ## 단계 2: 사업기획서 초안 생성
 
-### 2-1. 인터넷 검색 (`/api/search`)
+### 2-1. 인터넷 검색 (`/api/search`) — 동적 쿼리 생성
 
-병렬 5개 쿼리 동시 실행 후 URL 기준 중복 제거:
+LLM이 아이디어 맥락에 맞는 검색 쿼리 5개를 동적 생성한 후, 병렬 실행 후 URL 기준 중복 제거.
 
-| # | 쿼리 | 목적 |
+**동적 쿼리 생성** (`/api/generate`, `type: 'generate-queries'`):
+
+```
+클라이언트: { type: 'generate-queries', keyword: idea.name,
+              queryContext: 'business-plan', queryCount: 5,
+              ideaName, ideaTarget, ideaCategory }
+    ↓
+서버: buildSearchQueryPrompt() → 경쟁사/페인포인트/TAM/가격/규제 5개 관점 커버 지시
+    ↓
+LLM 호출 (jsonMode: true, maxTokens: 2000, 8초 타임아웃)
+    ↓
+JSON 배열 파싱 → 검색 쿼리 5개 반환
+```
+
+- LLM 실패 시 하드코딩 폴백 쿼리 사용:
+
+| # | 폴백 쿼리 | 목적 |
 |---|------|------|
 | 1 | `{아이디어명} 경쟁사 대안 솔루션 비교` | 경쟁 환경 파악 |
 | 2 | `{타깃고객} 고객 페인포인트 문제점 수요` | 고객 니즈 근거 확보 |
@@ -336,6 +375,7 @@ LLM 응답에서 JSON을 추출하는 시도 순서:
 - 쿼리당 최대 3개, 중복 제거 후 최대 15개
 - 검색 깊이: `advanced` (더 풍부한 스니펫)
 - 선택된 아이디어마다 각각 검색
+- 캐시 히트 시 Tavily API 호출 없이 즉시 반환
 
 ### 2-2. LLM 호출 (`/api/generate`, `type: 'business-plan'`)
 
@@ -375,9 +415,9 @@ LLM 호출 (maxTokens: 16000)
 
 초안과 독립적으로 실행되는 별도 생성 단계. 5개 에이전트가 순차적으로 담당 섹션을 작성하며, 각 에이전트는 이전 에이전트의 출력을 컨텍스트로 받는다.
 
-### 3-1. 검색 (초안과 동일한 5개 쿼리)
+### 3-1. 검색 (동적 쿼리 생성 + 캐싱)
 
-초안 생성(2-1)과 동일한 5개 쿼리를 재수집한다. (검색 결과를 상태로 저장하지 않아 재수집)
+초안 생성(2-1)과 동일한 방식으로 LLM이 5개 쿼리를 동적 생성한다. 검색 결과 캐싱으로 동일 쿼리가 캐시에 남아있으면 Tavily API 호출 없이 즉시 반환된다.
 
 ### 3-2. 에이전트 팀 순차 호출
 

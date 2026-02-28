@@ -23,6 +23,7 @@ GPT 중심, Gemini Flash 보조. 빠르고 저렴한 모델 우선.
 | full-plan-devil | Devil's Advocate | OpenAI `gpt-5` | Gemini `gemini-2.5-pro` | Claude `claude-sonnet-4-6` |
 | generate-prd | PRD 생성 | OpenAI `gpt-4.1` | Gemini `gemini-2.5-flash` | Claude `claude-sonnet-4-6` |
 | extract-idea | 아이디어 추출 | OpenAI `gpt-4.1-nano` | Gemini `gemini-2.5-flash-lite` | Claude `claude-haiku-4-5` |
+| generate-queries | 검색 쿼리 생성 | OpenAI `gpt-4.1-nano` | Gemini `gemini-2.5-flash-lite` | Claude `claude-haiku-4-5` |
 
 ---
 
@@ -41,6 +42,7 @@ Claude(한국어 서술) + Gemini Pro(데이터 분석) + GPT(추론) 역할 분
 | full-plan-devil | Devil's Advocate | Claude `claude-sonnet-4-6` | OpenAI `gpt-5` | Gemini `gemini-2.5-pro` |
 | generate-prd | PRD 생성 | OpenAI `gpt-4.1` | OpenAI `gpt-5` | Claude `claude-sonnet-4-6` |
 | extract-idea | 아이디어 추출 | OpenAI `gpt-4.1-nano` | Gemini `gemini-2.5-flash` | Claude `claude-haiku-4-5` |
+| generate-queries | 검색 쿼리 생성 | OpenAI `gpt-4.1-mini` | Gemini `gemini-2.5-flash` | Claude `claude-haiku-4-5` |
 
 ---
 
@@ -52,7 +54,8 @@ Claude(한국어 서술) + Gemini Pro(데이터 분석) + GPT(추론) 역할 분
 | **Gemini Pro** | 시장분석, 경쟁분석, 재무 | 대량 데이터 처리 + 1M 컨텍스트 |
 | **GPT-5** | 아이디어 발굴 | 창의성 + 다중 소스 통합 추론 |
 | **GPT-4.1** | PRD | 기술 스펙 (영어 혼용 OK) |
-| **GPT-4.1 Nano** | 아이디어 추출 | 단순 구조화 태스크, 비용 최소화 |
+| **GPT-4.1 Nano** | 아이디어 추출, 검색 쿼리 생성(Standard) | 단순 구조화 태스크, 비용 최소화 |
+| **GPT-4.1 Mini** | 검색 쿼리 생성(Premium) | 약간 더 나은 쿼리 다양성, 여전히 빠름 |
 
 ## 폴백 동작
 
