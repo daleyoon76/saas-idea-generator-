@@ -83,8 +83,7 @@ export type GuidedStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'generating' | 'complet
 export interface GuidedResult {
   idea: Idea;
   businessPlan: BusinessPlan;
-  provider: AIProvider;
-  model: string;
+  preset: QualityPreset;
   importedPlanContent?: string;
 }
 
@@ -130,5 +129,69 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     models: [
       { id: 'gemma2:9b', label: 'gemma2:9b', description: '기본', quality: 3, speed: 2, cost: 5 },
     ],
+  },
+};
+
+// --- 프리셋 기반 멀티모델 라우팅 ---
+
+export type QualityPreset = 'standard' | 'premium';
+
+export interface PresetModelConfig {
+  provider: AIProvider;
+  model: string;
+}
+
+/**
+ * 모듈별 프리셋 → fallback chain.
+ * 서버에서 첫 번째 사용 가능한 provider(API 키 존재)를 자동 선택한다.
+ *
+ * Standard: 비용 효율 (GPT 중심, Gemini Flash 보조)
+ * Premium:  최고 품질 3자 혼합 (Claude 한국어 서술 + Gemini Pro 데이터 분석 + GPT-5 추론)
+ */
+export const MODULE_PRESETS: Record<QualityPreset, Record<string, PresetModelConfig[]>> = {
+  standard: {
+    'generate-ideas':        [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },     { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'business-plan':         [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-market':      [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'full-plan-competition': [{ provider: 'openai', model: 'gpt-4.1-mini' },    { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+    'full-plan-strategy':    [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-finance':     [{ provider: 'openai', model: 'gpt-4.1' },         { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'full-plan-devil':       [{ provider: 'openai', model: 'gpt-5' },           { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },         { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },    { provider: 'gemini', model: 'gemini-2.5-flash-lite' }, { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+  },
+  premium: {
+    // 아이디어 발굴: 창의성 + 4개 소스 통합 → GPT-5 primary
+    'generate-ideas':        [{ provider: 'openai', model: 'gpt-5' },            { provider: 'gemini', model: 'gemini-2.5-pro' },        { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    // 초안: 한국어 서술 품질 최우선 → Claude Sonnet primary
+    'business-plan':         [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    // 시장분석: 대량 데이터 처리 + 1M 컨텍스트 → Gemini Pro primary
+    'full-plan-market':      [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    // 경쟁분석: 데이터 비교/표 생성 → Gemini Pro primary
+    'full-plan-competition': [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    // 전략·로드맵: 한국어 전략 서술 → Claude Sonnet primary
+    'full-plan-strategy':    [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    // 재무: 수치 분석 + 대량 컨텍스트 → Gemini Pro primary
+    'full-plan-finance':     [{ provider: 'gemini', model: 'gemini-2.5-pro' },   { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    // Devil's Advocate: 비판적 한국어 분석 → Claude Sonnet primary
+    'full-plan-devil':       [{ provider: 'claude', model: 'claude-sonnet-4-6' },{ provider: 'openai', model: 'gpt-5' },                 { provider: 'gemini', model: 'gemini-2.5-pro' }],
+    // PRD: 기술 스펙 (영어 혼용 OK) → GPT-4.1
+    'generate-prd':          [{ provider: 'openai', model: 'gpt-4.1' },          { provider: 'openai', model: 'gpt-5' },                 { provider: 'claude', model: 'claude-sonnet-4-6' }],
+    // 추출: 단순 태스크 → GPT-4.1 Nano
+    'extract-idea':          [{ provider: 'openai', model: 'gpt-4.1-nano' },     { provider: 'gemini', model: 'gemini-2.5-flash' },      { provider: 'claude', model: 'claude-haiku-4-5-20251001' }],
+  },
+};
+
+/** UI 표시용 프리셋 메타 정보 */
+export const PRESET_INFO: Record<QualityPreset, { label: string; description: string; detail: string }> = {
+  standard: {
+    label: '기본',
+    description: '비용 효율 최적화',
+    detail: 'GPT 중심 · Gemini Flash 보조',
+  },
+  premium: {
+    label: '고품질',
+    description: '최고 품질 한국어',
+    detail: 'Claude + Gemini Pro + GPT 혼합',
   },
 };

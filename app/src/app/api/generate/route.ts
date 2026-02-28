@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, createFullPlanDevilPrompt, SearchResult } from '@/lib/prompts';
-import { Idea } from '@/lib/types';
+import { AIProvider, Idea, QualityPreset, MODULE_PRESETS } from '@/lib/types';
 
 /** LLM 응답 결과: 텍스트 + 잘림 여부 */
 type LLMResult = { text: string; truncated: boolean };
@@ -104,10 +104,49 @@ function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: S
   return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults);
 }
 
+// --- 프리셋 → 모델 해석 ---
+
+function isProviderAvailable(provider: AIProvider): boolean {
+  switch (provider) {
+    case 'claude': return !!process.env.ANTHROPIC_API_KEY;
+    case 'openai': return !!process.env.OPENAI_API_KEY;
+    case 'gemini': return !!process.env.GEMINI_API_KEY;
+    case 'ollama': return false; // 프리셋에서 제외
+    default: return false;
+  }
+}
+
+function resolveModel(preset: QualityPreset, type: string): { provider: AIProvider; model: string } {
+  const chain = MODULE_PRESETS[preset]?.[type];
+  if (!chain) {
+    throw new Error(`알 수 없는 프리셋/타입 조합: ${preset}/${type}`);
+  }
+  for (const config of chain) {
+    if (isProviderAvailable(config.provider)) {
+      console.log(`[프리셋] ${preset}/${type} → ${config.provider}/${config.model}`);
+      return { provider: config.provider, model: config.model };
+    }
+  }
+  throw new Error('사용 가능한 AI 공급자가 없습니다. .env.local에 API 키를 하나 이상 설정해주세요.');
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { provider = 'ollama', model, prompt: rawPrompt, type, idea, searchResults } = body;
+    const { preset, provider: directProvider, model: directModel, prompt: rawPrompt, type, idea, searchResults } = body;
+
+    // 프리셋 모드: 서버에서 최적 모델 자동 선택 / 직접 지정: 하위 호환
+    let provider: AIProvider;
+    let model: string;
+    if (preset) {
+      const resolved = resolveModel(preset as QualityPreset, type as string);
+      provider = resolved.provider;
+      model = resolved.model;
+    } else {
+      provider = directProvider || 'ollama';
+      model = directModel;
+    }
+
     const jsonMode = type === 'json' || type === 'generate-ideas';
 
     // 아이디어 생성 요청: 서버에서 criteria.md 읽어 프롬프트 생성
@@ -190,7 +229,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       response: result.text,
-      meta: { truncated: result.truncated },
+      meta: { truncated: result.truncated, provider, model },
     });
   } catch (error) {
     console.error('Generate API error:', error);
@@ -331,10 +370,12 @@ async function generateWithOpenAI(model: string, prompt: string, maxTokens: numb
 
   // 모델별 최대 출력 토큰 상한
   const MODEL_MAX_OUTPUT: Record<string, number> = {
-    'gpt-4o':      16384,
-    'gpt-4o-mini': 16384,
-    'gpt-4.1':     32768,
+    'gpt-4o':       16384,
+    'gpt-4o-mini':  16384,
+    'gpt-4.1':      32768,
     'gpt-4.1-mini': 32768,
+    'gpt-4.1-nano': 32768,
+    'gpt-5':       128000,
   };
   const modelCap = MODEL_MAX_OUTPUT[model] ?? 16384;
   const clampedTokens = Math.min(maxTokens, modelCap);
