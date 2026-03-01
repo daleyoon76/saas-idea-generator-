@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CANYON } from "@/lib/colors";
+import UserMenu from "@/components/UserMenu";
 
 const features = [
   {
@@ -87,7 +88,7 @@ export default function Home() {
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section
-        className="relative overflow-hidden"
+        className="relative overflow-x-clip"
         style={{
           background: `linear-gradient(135deg, ${CANYON.heroBlack} 0%, ${CANYON.textDark} 30%, ${CANYON.deepRed} 60%, ${CANYON.mediumRed} 80%, ${CANYON.accent} 100%)`,
         }}
@@ -122,7 +123,7 @@ export default function Home() {
         />
 
         {/* Nav */}
-        <nav className="relative z-10 max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <nav className="relative z-20 max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -134,17 +135,20 @@ export default function Home() {
             </div>
             <span className="text-white font-semibold text-base tracking-tight">My CSO</span>
           </div>
-          <Link
-            href="/start"
-            className="px-4 py-2 text-sm rounded-lg border transition backdrop-blur-sm"
-            style={{
-              background: `rgba(245, 144, 30, 0.15)`,
-              borderColor: `rgba(245, 144, 30, 0.35)`,
-              color: "#FFD0A0",
-            }}
-          >
-            시작하기 →
-          </Link>
+          <div className="flex items-center gap-3">
+            <UserMenu />
+            <Link
+              href="/start"
+              className="px-4 py-2 text-sm rounded-lg border transition backdrop-blur-sm"
+              style={{
+                background: `rgba(245, 144, 30, 0.15)`,
+                borderColor: `rgba(245, 144, 30, 0.35)`,
+                color: "#FFD0A0",
+              }}
+            >
+              시작하기 →
+            </Link>
+          </div>
         </nav>
 
         {/* Hero Content */}

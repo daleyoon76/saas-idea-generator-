@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { CANYON } from '@/lib/colors';
+import UserMenu from '@/components/UserMenu';
 
 const C = CANYON;
 
@@ -13,6 +14,7 @@ export default function StartPage() {
         <Link href="/" className="text-lg font-bold" style={{ color: C.textDark }}>
           My CSO
         </Link>
+        <UserMenu />
       </nav>
 
       {/* 메인 컨텐츠 */}

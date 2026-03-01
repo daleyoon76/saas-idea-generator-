@@ -39,13 +39,25 @@
 
 ### Phase 2: 추가 기능 구현
 - [x] **에이전트 간 토큰 예산 최적화** ✅ — 3x→프로덕션 전환 (14K/16K/6K), 프롬프트 분량 제어 병행
-- [ ] **사용자 인증**
-  - NextAuth.js + Google OAuth 2.0 (+ 네이버/카카오 고려)
-  - 사용자 프로필, 세션 관리
+- [x] **사용자 인증 (Phase A)** ✅
+  - [x] NextAuth.js v5 (Auth.js) + Google OAuth 2.0 연동 ✅
+  - [x] JWT 세션 전략 (DB 없이 동작, 추후 adapter 추가 가능) ✅
+  - [x] 전 페이지 UserMenu (로그인/프로필/로그아웃) 배치 ✅
+  - [x] 커스텀 로그인 페이지 (CANYON 팔레트) ✅
+  - [x] 미로그인 사용자 기존 기능 100% 사용 가능 (Phase A) ✅
+  - [ ] 네이버/카카오 소셜 로그인 추가 (provider만 추가하면 완료)
+
 - [ ] **데이터베이스 + 히스토리**
   - PostgreSQL (Supabase 또는 Neon)
   - 사용자별 아이디어/기획서/PRD 저장·조회
   - 기획서 버전 관리 (초안 vs 풀버전 vs 수정본)
+- [ ] **사용자 인증 (Phase B)** — DB 연동 후
+  - [ ] PrismaAdapter 연결 (auth.ts에 `adapter: PrismaAdapter(prisma)` 추가)
+  - [ ] DB 세션 전략 전환 (JWT → database session)
+  - [ ] API 라우트 보호 — 저장/히스토리 API에 `auth()` 세션 체크 추가
+  - [ ] middleware.ts matcher 확장 (`/dashboard`, `/api/save-plan` 등 보호)
+  - [ ] 미로그인 사용자: 기획서 생성은 가능, 저장/히스토리는 로그인 필요
+
 - [ ] **대시보드**
   - 내 기획서 목록 (생성일, 상태, 모델)
   - 기획서 재열기·수정·재생성
@@ -95,6 +107,11 @@
   - 무료→유료 전환 트리거 (한도 초과 시 업그레이드 유도 UI)
   - 영수증/인보이스 자동 발행
   - 연간 결제 할인 (20%)
+- [ ] **사용자 인증 (Phase C)** — 과금 연동 후
+  - [ ] 사용량 추적 (월별 생성 건수, 토큰 소비량)
+  - [ ] 무료 tier 한도 초과 시 로그인+업그레이드 유도 UI
+  - [ ] 구독 상태에 따른 기능 게이팅 (Free/Pro/Business)
+  - [ ] 결제 정보와 사용자 세션 연동 (Stripe customer ID ↔ user ID)
 
 ### Phase 5: GTM (Go-to-Market) 전략
 

@@ -8,6 +8,7 @@ import {
   QualityPreset, MODULE_PRESETS, PRESET_INFO,
   GuidedAnswers, GuidedStep, GuidedResult, GUIDED_RESULT_KEY,
 } from '@/lib/types';
+import UserMenu from '@/components/UserMenu';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON } from '@/lib/colors';
 
@@ -459,15 +460,18 @@ export default function GuidedPage() {
           </div>
           <span className="font-semibold text-sm" style={{ color: C.textDark }}>My CSO</span>
         </Link>
-        {/* 컴팩트 프리셋 표시 */}
-        <button
-          onClick={() => setShowProviderPanel(!showProviderPanel)}
-          className="text-xs px-3 py-1.5 rounded-lg transition"
-          style={{ backgroundColor: C.cream, color: C.textDark, border: `1px solid ${C.border}` }}
-        >
-          {PRESET_INFO[selectedPreset].label} 모드{' '}
-          <span style={{ color: C.textLight }}>▾</span>
-        </button>
+        {/* 프리셋 + 사용자 메뉴 */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowProviderPanel(!showProviderPanel)}
+            className="text-xs px-3 py-1.5 rounded-lg transition"
+            style={{ backgroundColor: C.cream, color: C.textDark, border: `1px solid ${C.border}` }}
+          >
+            {PRESET_INFO[selectedPreset].label} 모드{' '}
+            <span style={{ color: C.textLight }}>▾</span>
+          </button>
+          <UserMenu />
+        </div>
       </nav>
 
       {/* 프리셋 선택 패널 (접이식) */}
