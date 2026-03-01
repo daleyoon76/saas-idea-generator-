@@ -38,7 +38,7 @@ function formatTime(seconds: number): string {
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun, AlignmentType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun, AlignmentType, ExternalHyperlink } from 'docx';
 import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, QualityPreset, MODULE_PRESETS, PRESET_INFO, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
@@ -1062,14 +1062,35 @@ function WorkflowPageInner() {
     );
   }
 
-  function parseInlineText(text: string): TextRun[] {
+  function parseInlineText(text: string): (TextRun | ExternalHyperlink)[] {
     const F = { name: 'Calibri', eastAsia: '맑은 고딕', cs: '맑은 고딕' } as const;
-    return text.split(/(\*\*[^*]+\*\*)/).map((part) => {
+    const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/);
+    const runs: (TextRun | ExternalHyperlink)[] = [];
+    for (const part of parts) {
+      if (!part) continue;
       if (part.startsWith('**') && part.endsWith('**')) {
-        return new TextRun({ text: part.slice(2, -2), bold: true, font: F });
+        runs.push(new TextRun({ text: part.slice(2, -2), bold: true, font: F }));
+      } else if (part.startsWith('*') && part.endsWith('*')) {
+        runs.push(new TextRun({ text: part.slice(1, -1), italics: true, font: F }));
+      } else if (part.startsWith('`') && part.endsWith('`')) {
+        runs.push(new TextRun({
+          text: part.slice(1, -1),
+          font: { name: 'Consolas', eastAsia: '맑은 고딕', cs: '맑은 고딕' },
+          shading: { type: ShadingType.CLEAR, fill: 'F5EDE6', color: 'auto' },
+        }));
+      } else if (/^\[([^\]]+)\]\(([^)]+)\)$/.test(part)) {
+        const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (m) {
+          runs.push(new ExternalHyperlink({
+            link: m[2],
+            children: [new TextRun({ text: m[1], color: '2563EB', underline: { type: 'single' }, font: F })],
+          }));
+        }
+      } else {
+        runs.push(new TextRun({ text: part, font: F }));
       }
-      return new TextRun({ text: part, font: F });
-    });
+    }
+    return runs;
   }
 
   async function buildDocxBlob(plan: BusinessPlan): Promise<Blob> {
@@ -1242,20 +1263,43 @@ function WorkflowPageInner() {
           }
         }
 
-      // 불릿 리스트
-      } else if (/^[-*] /.test(line)) {
+      // 블록인용 (> ...)
+      } else if (/^>\s?/.test(line)) {
+        // 연속된 > 줄을 모아서 각 줄을 Paragraph로
+        while (i < lines.length && /^>\s?/.test(lines[i])) {
+          const bqText = lines[i].replace(/^>\s?/, '');
+          children.push(new Paragraph({
+            children: parseInlineText(bqText),
+            border: { left: { style: BorderStyle.SINGLE, size: 24, color: DC.border, space: 8 } },
+            shading: { type: ShadingType.CLEAR, fill: 'F9F5F0', color: 'auto' },
+            indent: { left: 400 },
+            spacing: { after: 40 },
+          }));
+          i++;
+        }
+
+      // 불릿 리스트 (다단계)
+      } else if (/^(\s*)[-*] /.test(line)) {
+        const m = line.match(/^(\s*)[-*] /);
+        const indent = m ? m[1].length : 0;
+        const level = Math.min(Math.floor(indent / 2), 3);
+        const content = line.replace(/^\s*[-*] /, '');
         children.push(new Paragraph({
-          children: parseInlineText(line.slice(2)),
-          bullet: { level: 0 },
+          children: parseInlineText(content),
+          bullet: { level },
           spacing: { after: 60 },
         }));
         i++;
 
-      // 번호 리스트
-      } else if (/^\d+\. /.test(line)) {
+      // 번호 리스트 (다단계)
+      } else if (/^(\s*)\d+\.\s/.test(line)) {
+        const m = line.match(/^(\s*)\d+\.\s/);
+        const indent = m ? m[1].length : 0;
+        const level = Math.min(Math.floor(indent / 2), 3);
+        const content = line.replace(/^\s*\d+\.\s/, '');
         children.push(new Paragraph({
-          children: parseInlineText(line.replace(/^\d+\. /, '')),
-          numbering: { reference: 'default-numbering', level: 0 },
+          children: parseInlineText(content),
+          numbering: { reference: 'default-numbering', level },
           spacing: { after: 60 },
         }));
         i++;
@@ -1300,7 +1344,15 @@ function WorkflowPageInner() {
         },
       },
       numbering: {
-        config: [{ reference: 'default-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'left' }] }],
+        config: [{
+          reference: 'default-numbering',
+          levels: [
+            { level: 0, format: 'decimal', text: '%1.', alignment: 'left', style: { paragraph: { indent: { left: 720, hanging: 360 } } } },
+            { level: 1, format: 'decimal', text: '%2.', alignment: 'left', style: { paragraph: { indent: { left: 1440, hanging: 360 } } } },
+            { level: 2, format: 'decimal', text: '%3.', alignment: 'left', style: { paragraph: { indent: { left: 2160, hanging: 360 } } } },
+            { level: 3, format: 'decimal', text: '%4.', alignment: 'left', style: { paragraph: { indent: { left: 2880, hanging: 360 } } } },
+          ],
+        }],
       },
       sections: [{ children }],
     });
