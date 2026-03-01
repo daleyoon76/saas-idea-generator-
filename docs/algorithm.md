@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-03-01 (DA 강화: 14.4 규제 점검 + 14.5 스트레스 테스트, 토큰 8K 상향)
+> 마지막 업데이트: 2026-03-01 (네이버 Search API 5번째 병렬 소스 추가)
 
 ---
 
@@ -19,7 +19,7 @@ title: "알고리즘"
 ```
 [경로 A: 키워드 기반 — 기존]
 키워드 입력
-  → [검색: Tavily + Reddit + Google Trends + Product Hunt 4-way 병렬]
+  → [검색: Tavily + Reddit + Google Trends + Product Hunt + 네이버 5-way 병렬]
   → 아이디어 생성(LLM)
   → 아이디어 선택
   → [검색: Tavily 5개 쿼리]
@@ -56,7 +56,7 @@ title: "알고리즘"
 
 | `type` | 서버 동작 | 클라이언트 전송 필드 |
 |--------|-----------|-------------------|
-| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults`, `trendsResults`, `productHuntResults` |
+| `generate-ideas` | `criteria.md` 읽기 → `createIdeaGenerationPrompt()` 호출 | `keyword`, `searchResults`, `redditResults`, `trendsResults`, `productHuntResults`, `naverResults` |
 | `business-plan` | `bizplan-template.md` 읽기 → `createBusinessPlanPrompt()` 호출 | `idea`, `searchResults` |
 | `generate-prd` | `prd-template.md` 읽기 → `createPRDPrompt()` 호출 | `idea`, `businessPlanContent` |
 | `full-plan-market` | `createFullPlanMarketPrompt()` 직접 호출 | `idea`, `searchResults`, `existingPlanContent?` |
@@ -166,9 +166,9 @@ Future Forecast 생성 (Investor/Business 플랜 — 12개월 예측)
 
 ---
 
-### 1-1. 검색 (Tavily + Reddit + Google Trends + Product Hunt 4-way 병렬)
+### 1-1. 검색 (Tavily + Reddit + Google Trends + Product Hunt + 네이버 5-way 병렬)
 
-네 가지 소스를 **동시에** 실행한다.
+다섯 가지 소스를 **동시에** 실행한다.
 
 #### 1-1-A. Tavily 시장 조사 (`/api/search`) — 동적 쿼리 생성
 
@@ -289,18 +289,42 @@ SearchResult[] 변환:
 - 인증: `PRODUCT_HUNT_API_KEY` (Developer Token, 무료)
 - 실패해도 빈 배열 반환 — 기존 흐름 유지
 
+#### 1-1-E. 네이버 블로그·뉴스 수집 (`/api/naver`)
+
+네이버 Search API(블로그 + 뉴스)로 한국어 시장 동향 수집:
+
+**데이터 흐름**:
+
+```
+블로그: /v1/search/blog.json (display=5, sort=sim)
+뉴스: /v1/search/news.json (display=5, sort=date)
+    ↓ Promise.all 병렬 호출
+HTML 태그·엔티티 제거 (stripHtml)
+    ↓
+URL 중복 제거 → SearchResult[] 변환:
+  title   → "네이버 블로그: {제목}" / "네이버 뉴스: {제목}"
+  url     → item.link (뉴스는 originallink 우선)
+  snippet → item.description (HTML 제거)
+```
+
+- 인증: `X-Naver-Client-Id` + `X-Naver-Client-Secret` 헤더
+- API 키: `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` (https://developers.naver.com/apps, 25,000회/일 무료)
+- 한국어 번역 불필요 (네이버는 한국어 네이티브)
+- API 키 미설정 또는 실패 시 `{ results: [] }` 반환 — 기존 흐름 유지
+- 타임아웃: 8초 (`AbortSignal.timeout(8000)`)
+
 ### 1-2. LLM 호출 (`/api/generate`, `type: 'generate-ideas'`)
 
 **데이터 흐름:**
 
 ```
 클라이언트: { type: 'generate-ideas', keyword, searchResults, redditResults,
-              trendsResults, productHuntResults, provider, model }
+              trendsResults, productHuntResults, naverResults, provider, model }
     ↓
 서버(api/generate): fs.readFileSync('app/src/assets/criteria.md')
     ↓
 createIdeaGenerationPrompt(keyword, searchResults, criteria,
-                           redditResults, trendsResults, productHuntResults)
+                           redditResults, trendsResults, productHuntResults, naverResults)
     ↓
 LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 ```
@@ -324,6 +348,9 @@ LLM 호출 (jsonMode: true — Ollama는 format: 'json' 활성화)
 
 ## Product Hunt 트렌딩 제품 (최근 30일)
 [Product Hunt 트렌딩 제품 - 제목/URL/설명]
+
+## 네이버 블로그·뉴스 (한국 시장 동향)
+[네이버 블로그·뉴스 - 제목/URL/설명]
 
 위 발굴 기준과 시장 환경을 참고하여, "{키워드}" 관련 SaaS/Agent 아이디어 3개를
 아래 JSON 형식으로 출력하세요.
@@ -620,6 +647,7 @@ LLM은 데이터 차트를 ` ```chart ` 코드 블록 안에 JSON으로 출력�
 | `app/src/app/api/reddit/route.ts` | Reddit 페인포인트 검색 (PullPush.io) |
 | `app/src/app/api/trends/route.ts` | Google Trends 급등 신호 수집 (google-trends-api) |
 | `app/src/app/api/producthunt/route.ts` | Product Hunt 트렌딩 제품 수집 (GraphQL API v2) |
+| `app/src/app/api/naver/route.ts` | 네이버 블로그·뉴스 검색 (Naver Search API) |
 | `app/src/app/api/providers/route.ts` | provider 가용 여부 확인 |
 | `app/src/lib/prompts.ts` | 프롬프트 생성 함수 (아이디어·초안·PRD·풀버전 에이전트 5종) |
 | `app/src/lib/types.ts` | `Idea`, `BusinessPlan`, `WorkflowStep`, `PROVIDER_CONFIGS` 타입 |

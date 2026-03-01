@@ -70,9 +70,12 @@ ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 OPENAI_API_KEY=
 OLLAMA_BASE_URL=http://localhost:11434  # 기본값, 생략 가능
+NAVER_CLIENT_ID=      # 네이버 Search API (블로그·뉴스)
+NAVER_CLIENT_SECRET=   # https://developers.naver.com/apps 에서 발급
 ```
 
 Ollama는 별도 API 키 없이 `ollama serve` 실행만 필요. 기본 모델은 `gemma2:9b`.
+Naver Search API는 미설정 시 자동 스킵 (graceful fallback).
 
 ## 남은 작업 (to-do.md 참고)
 

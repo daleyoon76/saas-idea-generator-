@@ -501,6 +501,20 @@ function WorkflowPageInner() {
     }
   }
 
+  async function searchNaver(kw: string): Promise<SearchResult[]> {
+    try {
+      const res = await fetch('/api/naver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: kw || '' }),
+      });
+      if (!res.ok) return [];
+      return ((await res.json()).results || []) as SearchResult[];
+    } catch {
+      return [];
+    }
+  }
+
   /** LLM으로 동적 검색 쿼리 생성 (실패 시 fallbackQueries로 폴백) */
   async function generateSearchQueries(
     kw: string,
@@ -558,12 +572,13 @@ function WorkflowPageInner() {
     startTimer(timings.ideaSearch + timings.ideaLLM);
 
     try {
-      // Step 1: 시장 조사(Tavily) + Reddit + Google Trends + Product Hunt 병렬 수집
+      // Step 1: 시장 조사(Tavily) + Reddit + Google Trends + Product Hunt + 네이버 병렬 수집
       let searchData: SearchResult[] = [];
       let redditData: SearchResult[] = [];
       let trendsData: SearchResult[] = [];
       let productHuntData: SearchResult[] = [];
-      setLoadingMessage('시장 조사 + Reddit + Google Trends + Product Hunt 수집 중...');
+      let naverData: SearchResult[] = [];
+      setLoadingMessage('시장 조사 + Reddit + Google Trends + Product Hunt + 네이버 수집 중...');
       const searchStart = Date.now();
       try {
         const base = keyword || 'SaaS AI 에이전트';
@@ -572,16 +587,18 @@ function WorkflowPageInner() {
           `${base} B2B B2C 솔루션 스타트업 투자 기회`,
           `${base} AI 자동화 에이전트 적용 사례 2025`,
         ];
-        // LLM 쿼리 생성을 Reddit/Trends/PH와 병렬 실행 → 레이턴시 최소화
-        const [dynamicQueries, rd, tr, ph] = await Promise.all([
+        // LLM 쿼리 생성을 Reddit/Trends/PH/Naver와 병렬 실행 → 레이턴시 최소화
+        const [dynamicQueries, rd, tr, ph, nv] = await Promise.all([
           generateSearchQueries(base, 'idea-generation', fallbackQueries, 3),
           searchReddit(keyword || 'SaaS startup'),
           searchTrends(keyword || 'SaaS'),
           searchProductHunt(keyword || ''),
+          searchNaver(keyword || 'SaaS AI'),
         ]);
         redditData = rd;
         trendsData = tr;
         productHuntData = ph;
+        naverData = nv;
         searchData = await searchMultiple(dynamicQueries);
         setSearchResults(searchData);
       } catch (searchErr) {
@@ -590,7 +607,7 @@ function WorkflowPageInner() {
       updateStoredTiming('ideaSearch', Date.now() - searchStart);
       setProgressCurrent(1);
       setCompletedSteps([
-        `시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 + 급등 트렌드 ${trendsData.length}건 + Product Hunt ${productHuntData.length}건 수집 완료`,
+        `시장 자료 ${searchData.length}건 + Reddit ${redditData.length}건 + 급등 트렌드 ${trendsData.length}건 + Product Hunt ${productHuntData.length}건 + 네이버 ${naverData.length}건 수집 완료`,
       ]);
       updateEta(timings.ideaLLM);
 
@@ -610,6 +627,7 @@ function WorkflowPageInner() {
           redditResults: redditData,
           trendsResults: trendsData,
           productHuntResults: productHuntData,
+          naverResults: naverData,
         }),
       });
 

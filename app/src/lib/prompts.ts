@@ -8,7 +8,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[], productHuntResults?: SearchResult[]): string {
+export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[], productHuntResults?: SearchResult[], naverResults?: SearchResult[]): string {
   const keywordPart = keyword ? `"${keyword}" 관련` : '';
 
   let searchContext = '';
@@ -64,6 +64,19 @@ ${productHuntResults.map((r, i) => `${i + 1}. **${r.title.replace('Product Hunt 
 `;
   }
 
+  let naverContext = '';
+  if (naverResults && naverResults.length > 0) {
+    naverContext = `
+## 네이버 블로그·뉴스 (한국 시장 동향)
+다음은 네이버에서 수집한 한국어 블로그·뉴스 기사입니다.
+한국 시장의 실제 동향, 사용자 반응, 업계 분석을 아이디어 발굴에 반영하세요:
+
+${naverResults.map((r, i) => `${i + 1}. **${r.title}** (${r.url})
+   - ${r.snippet}`).join('\n\n')}
+
+`;
+  }
+
   const criteriaSection = criteria
     ? `## 아이디어 발굴 기준\n${criteria}`
     : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
@@ -77,7 +90,7 @@ ${productHuntResults.map((r, i) => `${i + 1}. **${r.title.replace('Product Hunt 
 - rationale 필드는 검색 자료 [번호]를 인용하여 근거를 제시하세요.
 
 ${criteriaSection}
-${searchContext}${redditContext}${trendsContext}${productHuntContext}
+${searchContext}${redditContext}${trendsContext}${productHuntContext}${naverContext}
 위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} SaaS/Agent 아이디어 3개를 아래 JSON 형식으로 출력하세요.
 각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
 
