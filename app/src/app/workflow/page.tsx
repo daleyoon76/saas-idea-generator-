@@ -196,6 +196,7 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
         const offscreen = document.createElement('div');
         offscreen.style.position = 'absolute';
         offscreen.style.left = '-99999px';
+        offscreen.style.width = '800px';
         document.body.appendChild(offscreen);
         let svg: string;
         try {
@@ -239,6 +240,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
         offscreen.style.position = 'absolute';
         offscreen.style.left = '-99999px';
         offscreen.style.top = '-99999px';
+        offscreen.style.width = `${mermaidRef.current?.clientWidth || 800}px`;
         document.body.appendChild(offscreen);
         try {
           const { svg: renderedSvg } = await m.default.render(id, cleaned, offscreen);
@@ -1906,31 +1908,73 @@ function WorkflowPageInner() {
     }).join('');
   }
 
-  /** 줄바꿈 없이 한 줄에 이어붙여진 마크다운 표를 복원 */
+  /** 줄바꿈 없이 한 줄에 이어붙여진 마크다운 표를 복원.
+   *  | :--- | :----: | 같은 콜론·공백 포함 구분선도 인식하고,
+   *  타이틀 행(컬럼 수 불일치)과 헤더 행을 구분하여 올바른 순서로 재조립한다. */
   function fixBrokenTables(content: string): string {
     return content.split('\n').map(line => {
-      // 200자 미만이거나 |---| 패턴이 없으면 정상 행
-      if (line.length < 200 || !line.includes('|---')) return line;
-
-      // 구분선에서 컬럼 수 추출: |---|---|---| → 3컬럼
-      const sepMatch = line.match(/\|(-{3,}\|)+/);
+      // 구분선 패턴: | :--- | :----: | 등 (공백·콜론 허용)
+      const sepPattern = /(\|\s*:?-{2,}:?\s*)+\|/;
+      const sepMatch = line.match(sepPattern);
       if (!sepMatch) return line;
-      const colCount = (sepMatch[0].match(/-{3,}/g) || []).length;
+
+      const sepStr = sepMatch[0];
+      const sepIdx = line.indexOf(sepStr);
+      const afterSep = line.slice(sepIdx + sepStr.length).trim();
+      // 구분선 뒤에 데이터 행(| 시작)이 없으면 정상 행
+      if (!afterSep.startsWith('|')) return line;
+
+      const colCount = (sepStr.match(/:?-{2,}:?/g) || []).length;
       if (colCount < 2) return line;
 
-      // 파이프 위치를 수집해 (colCount+1)개씩 끊어 행 분리
       const pipesPerRow = colCount + 1;
-      const pipePositions: number[] = [];
-      for (let i = 0; i < line.length; i++) {
-        if (line[i] === '|') pipePositions.push(i);
-      }
-      if (pipePositions.length < pipesPerRow) return line;
+      const beforeSep = line.slice(0, sepIdx).trim();
 
-      const rows: string[] = [];
-      for (let i = 0; i + pipesPerRow - 1 < pipePositions.length; i += pipesPerRow) {
-        rows.push(line.slice(pipePositions[i], pipePositions[i + pipesPerRow - 1] + 1).trim());
+      // ── 구분선 앞: 헤더 또는 타이틀 추출 ──
+      let titleText = '';
+      let headerRow = '';
+      if (beforeSep) {
+        const pipes: number[] = [];
+        for (let i = 0; i < beforeSep.length; i++) {
+          if (beforeSep[i] === '|') pipes.push(i);
+        }
+        if (pipes.length >= pipesPerRow) {
+          // 파이프가 충분 → 뒤에서 pipesPerRow개로 헤더 행 추출
+          const hStart = pipes[pipes.length - pipesPerRow];
+          headerRow = beforeSep.slice(hStart).trim();
+          const pre = beforeSep.slice(0, hStart).trim();
+          if (pre) titleText = pre.replace(/^\|\s*/, '').replace(/\s*\|$/, '').trim();
+        } else {
+          // 파이프 부족 → 타이틀/캡션 행 (파이프 제거)
+          titleText = beforeSep.replace(/^\|\s*/, '').replace(/\s*\|$/, '').trim();
+        }
       }
-      return rows.length > 1 ? rows.join('\n') : line;
+
+      // ── 구분선 뒤: 데이터 행 추출 ──
+      const dataRows: string[] = [];
+      if (afterSep) {
+        const pipes: number[] = [];
+        for (let i = 0; i < afterSep.length; i++) {
+          if (afterSep[i] === '|') pipes.push(i);
+        }
+        for (let i = 0; i + pipesPerRow - 1 < pipes.length; i += pipesPerRow) {
+          dataRows.push(afterSep.slice(pipes[i], pipes[i + pipesPerRow - 1] + 1).trim());
+        }
+      }
+
+      // 헤더가 구분선 앞에 없으면 첫 데이터 행을 헤더로 승격
+      if (!headerRow && dataRows.length > 0) {
+        headerRow = dataRows.shift()!;
+      }
+
+      // ── 조립: 타이틀 → 헤더 → 구분선 → 데이터 ──
+      const rows: string[] = [];
+      if (titleText) rows.push(titleText);
+      if (headerRow) rows.push(headerRow);
+      rows.push(sepStr.trim());
+      rows.push(...dataRows);
+
+      return rows.length > 2 ? rows.join('\n') : line;
     }).join('\n');
   }
 
