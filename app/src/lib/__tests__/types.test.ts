@@ -3,7 +3,7 @@ import { PROVIDER_CONFIGS, GUIDED_RESULT_KEY } from '../types';
 import type { AIProvider } from '../types';
 
 describe('PROVIDER_CONFIGS', () => {
-  const providers: AIProvider[] = ['ollama', 'claude', 'gemini', 'openai'];
+  const providers: AIProvider[] = ['claude', 'gemini', 'openai', 'ollama'];
 
   it('has all 4 providers', () => {
     expect(Object.keys(PROVIDER_CONFIGS).sort()).toEqual(providers.sort());
