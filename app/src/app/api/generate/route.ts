@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
       'full-plan-competition': 14000,   // 3섹션
       'full-plan-strategy':    16000,   // 4섹션
       'full-plan-finance':     16000,   // 4섹션+참고문헌
-      'full-plan-devil':       6000,    // RISK_SUMMARY + 섹션 14 (프롬프트로 분량 제어)
+      'full-plan-devil':       8000,    // RISK_SUMMARY + 섹션 14 (14.1~14.5, 프롬프트로 분량 제어)
       'generate-prd':          5000,
       'extract-idea':          2000,
       'generate-queries':      1000,

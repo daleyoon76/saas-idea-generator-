@@ -418,6 +418,23 @@ describe('POST /api/generate — full-plan agent types', () => {
     expect(data.response).toBe('# 악마의 변호인 (기존 반영)');
   });
 
+  it('uses correct token limit (8000) for full-plan-devil', async () => {
+    mockClaudeSuccess('DA 응답');
+
+    await POST(makeRequest({
+      provider: 'claude',
+      model: 'claude-sonnet-4-6',
+      type: 'full-plan-devil',
+      idea: sampleIdea,
+      fullPlanContent: '전체 기획서',
+      searchResults: [],
+    }) as never);
+
+    const callArgs = mockFetch.mock.calls[0];
+    const requestBody = JSON.parse(callArgs[1].body);
+    expect(requestBody.max_tokens).toBe(8000);
+  });
+
   it('uses correct token limit (14000) for full-plan-market', async () => {
     mockClaudeSuccess('에이전트 응답');
 

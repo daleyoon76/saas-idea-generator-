@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import {
   createIdeaGenerationPrompt,
   createBusinessPlanPrompt,
@@ -235,5 +237,101 @@ describe('createFullPlanDevilPrompt (Agent 5)', () => {
     expect(result).toContain('전체 기획서');
     expect(result).toContain("14. Devil's Advocate");
     expect(result).toContain('현실 검증');
+  });
+
+  it('includes 14.4 한국형 규제 리스크 점검 in defaultInstruction', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서');
+    expect(result).toContain('14.4 한국형 규제 리스크 점검');
+    expect(result).toContain('개인정보보호법 (PIPA)');
+    expect(result).toContain('정보통신망법');
+    expect(result).toContain('전자상거래법');
+    expect(result).toContain('인허가·라이선스');
+    expect(result).toContain('공정거래법/표시광고법');
+  });
+
+  it('includes 14.5 스트레스 테스트 in defaultInstruction', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서');
+    expect(result).toContain('14.5 스트레스 테스트');
+    expect(result).toContain('경쟁사 가격 30% 인하');
+    expect(result).toContain('핵심 인력(CTO 등) 이탈');
+    expect(result).toContain('고객 획득 비용(CAC) 2배 증가');
+    expect(result).toContain('시장 성장률 절반 축소');
+    expect(result).toContain('보안 사고 / 대규모 장애 발생');
+  });
+
+  it('sets word limit to 1200 in defaultInstruction', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서');
+    expect(result).toContain('1200단어 이내');
+    expect(result).not.toContain('800단어 이내');
+  });
+
+  it('uses agentInstruction over defaultInstruction when provided', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서', [], undefined, '커스텀 DA 지시');
+    expect(result).toContain('커스텀 DA 지시');
+    expect(result).not.toContain('14.4 한국형 규제 리스크 점검');
+  });
+
+  it('preserves existing 14.1~14.3 sections', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서');
+    expect(result).toContain('14.1 기획서 검토 의견');
+    expect(result).toContain('14.2 MVP 첫단계 추천');
+    expect(result).toContain('14.3 주의할점');
+  });
+
+  it('includes RISK_SUMMARY markers', () => {
+    const result = createFullPlanDevilPrompt(mockIdea, '전체 기획서');
+    expect(result).toContain('<!-- RISK_SUMMARY -->');
+    expect(result).toContain('<!-- /RISK_SUMMARY -->');
+  });
+});
+
+// ── agents_jd.md 단일 소스 검증 ───────────────────────────────────────────
+
+describe('agents_jd.md AGENT:full-plan-devil block (단일 소스)', () => {
+  function extractAgentBlock(content: string, agentType: string): string | undefined {
+    const openTag = `<!-- AGENT:${agentType} -->`;
+    const closeTag = `<!-- /AGENT:${agentType} -->`;
+    const start = content.indexOf(openTag);
+    const end = content.indexOf(closeTag);
+    if (start === -1 || end === -1) return undefined;
+    return content.slice(start + openTag.length, end).trim();
+  }
+
+  const agentsJdPath = path.join(__dirname, '..', '..', '..', '..', 'docs', 'agents_jd.md');
+  let devilBlock: string | undefined;
+
+  try {
+    const content = fs.readFileSync(agentsJdPath, 'utf-8');
+    devilBlock = extractAgentBlock(content, 'full-plan-devil');
+  } catch {
+    // CI 등에서 파일 없으면 스킵
+  }
+
+  it('extracts the devil block from agents_jd.md', () => {
+    expect(devilBlock).toBeDefined();
+    expect(devilBlock!.length).toBeGreaterThan(100);
+  });
+
+  it('contains 14.4 한국형 규제 리스크 점검', () => {
+    expect(devilBlock).toContain('14.4 한국형 규제 리스크 점검');
+    expect(devilBlock).toContain('개인정보보호법 (PIPA)');
+    expect(devilBlock).toContain('전자상거래법');
+  });
+
+  it('contains 14.5 스트레스 테스트', () => {
+    expect(devilBlock).toContain('14.5 스트레스 테스트');
+    expect(devilBlock).toContain('경쟁사 가격 30% 인하');
+    expect(devilBlock).toContain('보안 사고 / 대규모 장애 발생');
+  });
+
+  it('preserves 14.1~14.3 sections', () => {
+    expect(devilBlock).toContain('14.1 기획서 검토 의견');
+    expect(devilBlock).toContain('14.2 MVP 첫단계 추천');
+    expect(devilBlock).toContain('14.3 주의할점');
+  });
+
+  it('contains RISK_SUMMARY markers', () => {
+    expect(devilBlock).toContain('<!-- RISK_SUMMARY -->');
+    expect(devilBlock).toContain('<!-- /RISK_SUMMARY -->');
   });
 });

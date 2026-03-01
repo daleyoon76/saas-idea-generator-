@@ -10,7 +10,7 @@ title: "알고리즘"
 # 알고리즘 문서
 
 > 알고리즘이 변경될 때마다 이 문서를 업데이트한다.
-> 마지막 업데이트: 2026-02-28 (토큰 예산 1x 프로덕션 기준 전환)
+> 마지막 업데이트: 2026-03-01 (DA 강화: 14.4 규제 점검 + 14.5 스트레스 테스트, 토큰 8K 상향)
 
 ---
 
@@ -76,7 +76,7 @@ title: "알고리즘"
 | `business-plan` | 16,000 |
 | `full-plan-market` / `competition` | 14,000 |
 | `full-plan-strategy` / `finance` | 16,000 |
-| `full-plan-devil` | 6,000 |
+| `full-plan-devil` | 8,000 |
 | `generate-prd` | 5,000 |
 | `extract-idea` | 2,000 |
 | `generate-queries` | 1,000 |
@@ -461,7 +461,7 @@ combineFullPlanSections()
     ↓
 Agent 5 (full-plan-devil)
   입력: idea + combined(전체 기획서) + searchResults
-  출력: <!-- RISK_SUMMARY --> 핵심 경고 3~5줄 + 섹션 14(현실 검증)
+  출력: <!-- RISK_SUMMARY --> 핵심 경고 3~5줄 + 섹션 14(현실 검증 + 규제 점검 + 스트레스 테스트)
   → devilContent
     ↓
 extractRiskSummary(devilContent)
