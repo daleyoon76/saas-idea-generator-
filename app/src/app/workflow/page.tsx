@@ -46,7 +46,7 @@ import { parseChartJson } from '@/lib/chart-schema';
 import ChartRenderer from '@/components/ChartRenderer';
 
 /** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
-function sanitizeMermaidSyntax(src: string): string {
+function sanitizeMermaidSyntax(src: string, level: number = 0): string {
   let result = src
     // BOM 제거
     .replace(/^\uFEFF/, '')
@@ -67,8 +67,7 @@ function sanitizeMermaidSyntax(src: string): string {
   // 리터럴 \n → <br/> (Mermaid 줄바꿈). 실제 개행(\n 문자)과 구별됨.
   result = result.replace(/\\n/g, '<br/>');
 
-  // [], {} 노드 라벨 및 subgraph 이름 내 () → 전각 괄호 （）로 치환
-  // (mermaid가 ()를 노드 형태로 해석하는 파싱 오류 방지)
+  // ── Level 0: [], {} 노드 라벨 및 subgraph 이름 내 () → 전각 괄호 ──
   result = result.replace(/\[[^\]]*\]/g, (m) =>
     m.replace(/\(/g, '（').replace(/\)/g, '）')
   );
@@ -78,6 +77,32 @@ function sanitizeMermaidSyntax(src: string): string {
   result = result.replace(/^(\s*subgraph\s+)(.+)$/gm, (_, prefix, name) =>
     prefix + name.replace(/\(/g, '（').replace(/\)/g, '）')
   );
+
+  // ── Level 1: edge label |...| 및 ((...)) 이중괄호 노드 내부 () 치환 ──
+  if (level >= 1) {
+    // edge label |text with ()| → |text with （）|
+    result = result.replace(/\|[^|]*\|/g, (m) =>
+      m.replace(/\(/g, '（').replace(/\)/g, '）')
+    );
+    // ((...)) 이중괄호 노드: 외곽 (( )) 유지, 내부 () → （）
+    result = result.replace(/\(\(([^()]*(?:\([^)]*\))*[^()]*)\)\)/g, (match, inner: string) => {
+      return '((' + inner.replace(/\(/g, '（').replace(/\)/g, '）') + '))';
+    });
+  }
+
+  // ── Level 2: 모든 줄에서 () → （） 전역 치환 (핵 옵션) ──
+  if (level >= 2) {
+    const lines = result.split('\n');
+    result = lines.map(line => {
+      const trimmed = line.trim();
+      // 다이어그램 타입 선언, 주석, 빈 줄은 제외
+      if (!trimmed || trimmed.startsWith('%%') ||
+          /^\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt)\b/.test(trimmed)) {
+        return line;
+      }
+      return line.replace(/\(/g, '（').replace(/\)/g, '）');
+    }).join('\n');
+  }
 
   // 긴 노드 라벨에 자동 줄바꿈 삽입 (각 줄이 13자 초과 시, 재귀)
   const MAX_LINE = 13;
@@ -152,28 +177,37 @@ async function svgToPng(svgString: string): Promise<{ data: Uint8Array; width: n
   }
 }
 
-/** Render a mermaid chart to PNG for docx embedding. Returns null on failure. */
+/** Render a mermaid chart to PNG for docx embedding. Returns null on failure.
+ *  Level 0→1→2 순서로 sanitize 재시도하여 파싱 성공률을 높인다. */
 async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
   try {
-    const sanitized = sanitizeMermaidSyntax(chart);
     const m = await import('mermaid');
     m.default.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
       themeVariables: {
         primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
         lineColor: '#8B3520', textColor: '#3D1E10',
     }});
-    const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'absolute';
-    offscreen.style.left = '-99999px';
-    document.body.appendChild(offscreen);
-    let svg: string;
-    try {
-      ({ svg } = await m.default.render(id, sanitized, offscreen));
-    } finally {
-      offscreen.remove();
+
+    for (const level of [0, 1, 2]) {
+      try {
+        const sanitized = sanitizeMermaidSyntax(chart, level);
+        const id = `mermaid-docx-${Math.random().toString(36).slice(2, 9)}`;
+        const offscreen = document.createElement('div');
+        offscreen.style.position = 'absolute';
+        offscreen.style.left = '-99999px';
+        document.body.appendChild(offscreen);
+        let svg: string;
+        try {
+          ({ svg } = await m.default.render(id, sanitized, offscreen));
+        } finally {
+          offscreen.remove();
+        }
+        return svgToPng(svg);
+      } catch {
+        if (level < 2) console.warn(`[Mermaid PNG] level ${level} 실패, level ${level + 1} 시도`);
+      }
     }
-    return svgToPng(svg);
+    return null;
   } catch {
     return null;
   }
@@ -291,6 +325,79 @@ function renderChartSvg(chart: import('@/lib/chart-schema').ChartData): string {
 
     if (chart.xLabel) body += `<text x="${PAD.left + plotW / 2}" y="${H - 10}" text-anchor="middle" font-size="11" fill="${CANYON.textMid}">${esc(chart.xLabel)}</text>`;
     if (chart.yLabel) body += `<text x="15" y="${PAD.top + plotH / 2}" text-anchor="middle" font-size="11" fill="${CANYON.textMid}" transform="rotate(-90 15 ${PAD.top + plotH / 2})">${esc(chart.yLabel)}</text>`;
+
+  } else if (chart.type === 'radar') {
+    // Radar chart: 동심 다각형 그리드 + 데이터 다각형
+    const cx = W / 2, cy = H / 2 + 10;
+    const maxR = Math.min(plotW, plotH) / 2 - 20;
+    const n = chart.data.length;
+    if (n < 3) {
+      // radar는 최소 3축 필요, 불가능하면 빈 SVG
+      body += `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="12" fill="${CANYON.textMid}">데이터 부족 (최소 3축 필요)</text>`;
+    } else {
+      // 시리즈 키 감지
+      const skip = new Set(['name', 'value', 'x', 'y']);
+      const seriesKeys: string[] = [];
+      for (const d of chart.data) {
+        for (const k of Object.keys(d)) {
+          if (!skip.has(k) && typeof d[k] === 'number' && !seriesKeys.includes(k)) seriesKeys.push(k);
+        }
+      }
+      if (seriesKeys.length === 0 && chart.data.some(d => d.value !== undefined)) seriesKeys.push('value');
+
+      // 최대값
+      let maxVal = 0;
+      for (const d of chart.data) for (const k of seriesKeys) { const v = Number(d[k] ?? 0); if (v > maxVal) maxVal = v; }
+      if (maxVal === 0) maxVal = 1;
+
+      const angleStep = (2 * Math.PI) / n;
+
+      // 동심 다각형 그리드 (5단계)
+      const levels = 5;
+      for (let lv = 1; lv <= levels; lv++) {
+        const r = (lv / levels) * maxR;
+        const pts = Array.from({ length: n }, (_, i) => {
+          const angle = -Math.PI / 2 + i * angleStep;
+          return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
+        }).join(' ');
+        body += `<polygon points="${pts}" fill="none" stroke="${CANYON.border}" stroke-dasharray="2 2"/>`;
+      }
+
+      // 중심→꼭짓점 축선
+      for (let i = 0; i < n; i++) {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const ex = cx + maxR * Math.cos(angle);
+        const ey = cy + maxR * Math.sin(angle);
+        body += `<line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="${CANYON.border}" stroke-width="0.5"/>`;
+      }
+
+      // 꼭짓점 외곽 라벨
+      for (let i = 0; i < n; i++) {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const lx = cx + (maxR + 18) * Math.cos(angle);
+        const ly = cy + (maxR + 18) * Math.sin(angle);
+        body += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" font-size="10" fill="${CANYON.textMid}">${esc(chart.data[i].name)}</text>`;
+      }
+
+      // 데이터 다각형 (시리즈별)
+      seriesKeys.forEach((k, si) => {
+        const color = colors[si % colors.length];
+        const pts = chart.data.map((d, i) => {
+          const v = Number(d[k] ?? 0);
+          const r = (v / maxVal) * maxR;
+          const angle = -Math.PI / 2 + i * angleStep;
+          return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
+        }).join(' ');
+        body += `<polygon points="${pts}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="2"/>`;
+        // dot
+        chart.data.forEach((d, i) => {
+          const v = Number(d[k] ?? 0);
+          const r = (v / maxVal) * maxR;
+          const angle = -Math.PI / 2 + i * angleStep;
+          body += `<circle cx="${cx + r * Math.cos(angle)}" cy="${cy + r * Math.sin(angle)}" r="3" fill="${color}"/>`;
+        });
+      });
+    }
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="white"/>${title}${body}</svg>`;
@@ -301,30 +408,43 @@ function MermaidDiagram({ chart }: { chart: string }) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState(false);
   const [fit, setFit] = useState(false);
-  const sanitized = sanitizeMermaidSyntax(chart);
 
   useEffect(() => {
     let cancelled = false;
-    const cleaned = sanitizeMermaidSyntax(chart);
-    const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'absolute';
-    offscreen.style.left = '-99999px';
-    offscreen.style.top = '-99999px';
-    document.body.appendChild(offscreen);
 
-    import('mermaid').then((m) => {
+    import('mermaid').then(async (m) => {
       m.default.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
         themeVariables: {
           primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
           lineColor: '#8B3520', textColor: '#3D1E10',
       }});
-      m.default.render(id, cleaned, offscreen)
-        .then(({ svg: renderedSvg }) => { if (!cancelled) setSvg(renderedSvg); })
-        .catch((err) => { if (!cancelled) { console.warn('[Mermaid] render failed:', err, '\nSanitized input:', cleaned); setError(true); } })
-        .finally(() => { offscreen.remove(); });
+
+      // Level 0→1→2 순서로 sanitize 재시도
+      for (const level of [0, 1, 2]) {
+        if (cancelled) return;
+        const cleaned = sanitizeMermaidSyntax(chart, level);
+        const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+        const offscreen = document.createElement('div');
+        offscreen.style.position = 'absolute';
+        offscreen.style.left = '-99999px';
+        offscreen.style.top = '-99999px';
+        document.body.appendChild(offscreen);
+        try {
+          const { svg: renderedSvg } = await m.default.render(id, cleaned, offscreen);
+          if (!cancelled) setSvg(renderedSvg);
+          return; // 성공 → 종료
+        } catch (err) {
+          if (level < 2) {
+            console.warn(`[Mermaid] level ${level} 실패, level ${level + 1} 시도:`, err);
+          } else {
+            if (!cancelled) { console.warn('[Mermaid] 모든 레벨 실패:', err, '\nInput:', chart); setError(true); }
+          }
+        } finally {
+          offscreen.remove();
+        }
+      }
     });
-    return () => { cancelled = true; offscreen.remove(); };
+    return () => { cancelled = true; };
   }, [chart]);
 
   // SVG 렌더 후: 자연 폭 < 컨테이너 폭이면 확대(fit), 아니면 스크롤
@@ -1384,6 +1504,28 @@ function WorkflowPageInner() {
     return content;
   }
 
+  /** 풀버전 기획서에서 섹션 15 이상의 초과 섹션을 제거 */
+  function stripExtraSections(content: string): string {
+    const lines = content.split('\n');
+    const result: string[] = [];
+    let stripping = false;
+    for (const line of lines) {
+      // ## 15. 또는 ### 16. 등 15번 이상 섹션 헤딩 감지
+      if (/^#{2,3}\s+\**(?:1[5-9]|[2-9]\d)\s*[.．:：)]/m.test(line)) {
+        stripping = true;
+        continue;
+      }
+      // 제거 중 다음 정상 헤딩(##으로 시작)을 만나면 제거 중단
+      if (stripping && /^#{2,3}\s+/.test(line)) {
+        stripping = false;
+      }
+      if (!stripping) {
+        result.push(line);
+      }
+    }
+    return result.join('\n');
+  }
+
   /** 풀버전 기획서 섹션 완성도 검증: 섹션 1~13 + 참고문헌 */
   function validateFullPlanSections(content: string): string {
     const missing: string[] = [];
@@ -1576,7 +1718,8 @@ function WorkflowPageInner() {
     }
 
     // 풀버전 섹션 완성도 검증
-    const validatedContent = validateFullPlanSections(finalContent);
+    const strippedContent = stripExtraSections(finalContent);
+    const validatedContent = validateFullPlanSections(strippedContent);
 
     return {
       ideaId: idea.id,

@@ -247,6 +247,7 @@ export function createFullPlanMarketPrompt(idea: FullPlanIdea, searchResults?: S
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
@@ -296,6 +297,7 @@ export function createFullPlanCompetitionPrompt(idea: FullPlanIdea, marketConten
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
@@ -353,6 +355,7 @@ export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: 
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
@@ -434,6 +437,7 @@ export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: s
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
@@ -455,6 +459,7 @@ ${agentInstruction || defaultInstruction}`;
 export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: string, searchResults?: SearchResult[], existingPlanContent?: string, agentInstruction?: string): string {
   const defaultInstruction = `당신은 냉정한 현실 검증 전문가(Devil's Advocate)입니다. 완성된 사업기획서 전문을 읽고 아래 두 블록을 순서대로 출력하세요.
 기존 섹션(1~13)은 절대 출력하지 마세요.
+섹션 14 이외의 번호(15, 16, ...)를 절대 생성하지 마세요.
 
 **출력 구조 (반드시 이 순서로):**
 
@@ -502,6 +507,7 @@ export function createFullPlanDevilPrompt(idea: FullPlanIdea, fullPlanContent: s
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.`;
 
@@ -587,6 +593,7 @@ ${searchContext}
   · bar/line: {"type":"bar","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"카테고리","시리즈명":값}]}
   · pie: {"type":"pie","title":"제목","data":[{"name":"항목","value":값}]}
   · scatter: {"type":"scatter","title":"제목","xLabel":"X축","yLabel":"Y축","data":[{"name":"라벨","x":0.7,"y":0.3}]}
+  · radar: {"type":"radar","title":"제목","data":[{"name":"평가항목","시리즈명":값}]}
 - 프로세스 흐름도만 \`\`\`mermaid 코드 블록의 flowchart를 사용하세요. 화살표는 반드시 ASCII \`-->\`를 사용하세요.
 - 표 데이터는 기존처럼 Markdown 표를 사용하세요.
 

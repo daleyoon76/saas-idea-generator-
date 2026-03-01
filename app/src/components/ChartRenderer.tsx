@@ -5,6 +5,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, LabelList,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts';
 import { parseChartJson, ChartData } from '@/lib/chart-schema';
 import { CANYON } from '@/lib/colors';
@@ -87,6 +88,24 @@ function ChartPie({ chart }: { chart: ChartData }) {
   );
 }
 
+function ChartRadar({ chart }: { chart: ChartData }) {
+  const series = getSeriesKeys(chart);
+  return (
+    <ResponsiveContainer width="100%" height={400}>
+      <RadarChart data={chart.data} cx="50%" cy="50%" outerRadius="70%">
+        <PolarGrid stroke={CANYON.border} />
+        <PolarAngleAxis dataKey="name" tick={{ fill: CANYON.textMid, fontSize: 11 }} />
+        <PolarRadiusAxis tick={{ fill: CANYON.textLight, fontSize: 10 }} />
+        <Tooltip contentStyle={{ backgroundColor: CANYON.cardBg, border: `1px solid ${CANYON.border}`, borderRadius: 8, color: CANYON.textDark, fontSize: 13 }} />
+        {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: CANYON.textMid }} />}
+        {series.map((key, i) => (
+          <Radar key={key} name={key} dataKey={key} stroke={SERIES_COLORS[i % SERIES_COLORS.length]} fill={SERIES_COLORS[i % SERIES_COLORS.length]} fillOpacity={0.25} />
+        ))}
+      </RadarChart>
+    </ResponsiveContainer>
+  );
+}
+
 function ChartScatter({ chart }: { chart: ChartData }) {
   return (
     <ResponsiveContainer width="100%" height={400}>
@@ -135,6 +154,7 @@ export default function ChartRenderer({ json }: { json: string }) {
       {chart.type === 'line' && <ChartLine chart={chart} />}
       {chart.type === 'pie' && <ChartPie chart={chart} />}
       {chart.type === 'scatter' && <ChartScatter chart={chart} />}
+      {chart.type === 'radar' && <ChartRadar chart={chart} />}
     </div>
   );
 }
