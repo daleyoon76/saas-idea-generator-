@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { createBusinessPlanPrompt, createIdeaGenerationPrompt, createPRDPrompt, createIdeaExtractionPrompt, createFullPlanMarketPrompt, createFullPlanCompetitionPrompt, createFullPlanStrategyPrompt, createFullPlanFinancePrompt, createFullPlanDevilPrompt, SearchResult } from '@/lib/prompts';
-import { AIProvider, Idea, QualityPreset, MODULE_PRESETS } from '@/lib/types';
+import { AIProvider, Idea, QualityPreset, MODULE_PRESETS, TokenUsage, MODEL_PRICING } from '@/lib/types';
 
-/** LLM 응답 결과: 텍스트 + 잘림 여부 */
-type LLMResult = { text: string; truncated: boolean };
+/** LLM 응답 결과: 텍스트 + 잘림 여부 + 토큰 사용량 */
+type LLMResult = {
+  text: string;
+  truncated: boolean;
+  usage?: { inputTokens: number; outputTokens: number };
+};
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) return 0;
+  return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
+}
 
 // YAML frontmatter(--- ... ---) 제거
 function stripFrontmatter(content: string): string {
@@ -179,6 +189,41 @@ async function callProvider(provider: AIProvider, model: string, prompt: string,
   }
 }
 
+/** truncated 응답 시 1회 이어쓰기(continuation) 자동 수행. JSON 모드는 스킵. */
+async function callProviderWithContinuation(
+  provider: AIProvider, model: string, prompt: string, maxTokens: number, jsonMode: boolean,
+): Promise<LLMResult> {
+  const first = await callProvider(provider, model, prompt, maxTokens, jsonMode);
+
+  // JSON 모드이거나 잘리지 않았으면 그대로 반환
+  if (!first.truncated || jsonMode) return first;
+
+  // 이어쓰기 시도: 마지막 ~2000자를 컨텍스트로 전달
+  try {
+    const tail = first.text.slice(-2000);
+    const continuationPrompt =
+      `이전 응답이 토큰 한도로 잘렸습니다. 아래는 이전 응답의 마지막 부분입니다:\n\n` +
+      `---\n${tail}\n---\n\n` +
+      `이어서 작성해 주세요. 이전 내용을 반복하지 말고, 잘린 지점부터 자연스럽게 이어서 나머지 섹션을 완성해 주세요.`;
+
+    console.log(`[이어쓰기] ${provider}/${model} — truncated 응답 감지, continuation 호출`);
+    const second = await callProvider(provider, model, continuationPrompt, maxTokens, jsonMode);
+
+    return {
+      text: first.text + second.text,
+      truncated: second.truncated, // 2차도 잘리면 그대로 전달
+      usage: {
+        inputTokens: (first.usage?.inputTokens ?? 0) + (second.usage?.inputTokens ?? 0),
+        outputTokens: (first.usage?.outputTokens ?? 0) + (second.usage?.outputTokens ?? 0),
+      },
+    };
+  } catch (err) {
+    // 이어쓰기 실패 시 원본 그대로 반환 (데이터 손실 없음)
+    console.warn(`[이어쓰기] ${provider}/${model} continuation 실패, 원본 반환:`, err);
+    return first;
+  }
+}
+
 /** 프리셋 fallback chain: API 키 확인 → 실제 호출 시도 → 실패 시 다음 모델 */
 async function callWithPreset(
   preset: QualityPreset, type: string, prompt: string, maxTokens: number, jsonMode: boolean,
@@ -195,7 +240,7 @@ async function callWithPreset(
   for (const config of available) {
     try {
       console.log(`[프리셋] ${preset}/${type} → ${config.provider}/${config.model}`);
-      const result = await callProvider(config.provider, config.model, prompt, maxTokens, jsonMode);
+      const result = await callProviderWithContinuation(config.provider, config.model, prompt, maxTokens, jsonMode);
       return { result, provider: config.provider, model: config.model };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
@@ -291,12 +336,21 @@ export async function POST(request: NextRequest) {
       provider = directProvider || 'ollama';
       model = directModel || '';
       const defaults: Record<string, string> = { ollama: 'gemma2:9b', claude: 'claude-sonnet-4-6', gemini: 'gemini-2.5-flash', openai: 'gpt-4o' };
-      result = await callProvider(provider, model || defaults[provider] || '', prompt, maxTokens, jsonMode);
+      result = await callProviderWithContinuation(provider, model || defaults[provider] || '', prompt, maxTokens, jsonMode);
     }
+
+    const usage: TokenUsage = {
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      costUSD: calculateCost(model, result.usage?.inputTokens ?? 0, result.usage?.outputTokens ?? 0),
+      provider,
+      model,
+    };
+    console.log(`[토큰] ${preset || 'direct'}/${type} | ${provider}/${model} | in:${usage.inputTokens} out:${usage.outputTokens} | $${usage.costUSD.toFixed(6)}`);
 
     return NextResponse.json({
       response: result.text,
-      meta: { truncated: result.truncated, provider, model },
+      meta: { truncated: result.truncated, provider, model, usage },
     });
   } catch (error) {
     console.error('Generate API error:', error);
@@ -326,7 +380,14 @@ async function generateWithOllama(model: string, prompt: string, jsonMode: boole
   const data = await response.json();
   // Ollama done_reason: 'stop' (정상) | 'length' (토큰 한도)
   const truncated = data.done_reason === 'length';
-  return { text: data.response, truncated };
+  return {
+    text: data.response,
+    truncated,
+    usage: {
+      inputTokens: data.prompt_eval_count ?? 0,
+      outputTokens: data.eval_count ?? 0,
+    },
+  };
 }
 
 async function generateWithClaude(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<LLMResult> {
@@ -391,7 +452,14 @@ async function generateWithClaude(model: string, prompt: string, maxTokens: numb
     const text: string = data.content[0].text;
     // stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence'
     const truncated = data.stop_reason === 'max_tokens';
-    return { text, truncated };
+    return {
+      text,
+      truncated,
+      usage: {
+        inputTokens: data.usage?.input_tokens ?? 0,
+        outputTokens: data.usage?.output_tokens ?? 0,
+      },
+    };
   }
 
   throw new Error('Claude API: 서버 과부하로 재시도 한도 초과. 잠시 후 다시 시도하거나 다른 모델을 선택해주세요.');
@@ -428,7 +496,14 @@ async function generateWithGemini(model: string, prompt: string, maxTokens: numb
   const text: string = candidate.content?.parts?.[0]?.text ?? '';
   const finishReason: string = candidate.finishReason ?? 'STOP';
   const truncated = finishReason === 'MAX_TOKENS';
-  return { text, truncated };
+  return {
+    text,
+    truncated,
+    usage: {
+      inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+      outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+    },
+  };
 }
 
 async function generateWithOpenAI(model: string, prompt: string, maxTokens: number = 8192, retries = 4): Promise<LLMResult> {
@@ -488,7 +563,14 @@ async function generateWithOpenAI(model: string, prompt: string, maxTokens: numb
     const text: string = data.choices[0].message.content;
     // finish_reason: 'stop' (정상) | 'length' (토큰 한도)
     const truncated = data.choices[0].finish_reason === 'length';
-    return { text, truncated };
+    return {
+      text,
+      truncated,
+      usage: {
+        inputTokens: data.usage?.prompt_tokens ?? 0,
+        outputTokens: data.usage?.completion_tokens ?? 0,
+      },
+    };
   }
 
   throw new Error('OpenAI API: Rate limit 재시도 한도 초과. 잠시 후 다시 시도해주세요.');

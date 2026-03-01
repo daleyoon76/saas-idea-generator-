@@ -185,6 +185,37 @@ export const MODULE_PRESETS: Record<QualityPreset, Record<string, PresetModelCon
   },
 };
 
+// --- 토큰 사용량 & 원가 추적 ---
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+  provider: AIProvider;
+  model: string;
+}
+
+// 2026-03 기준 USD per 1M tokens
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Claude
+  'claude-sonnet-4-6':           { input: 3.00,  output: 15.00 },
+  'claude-haiku-4-5-20251001':   { input: 1.00,  output: 5.00  },
+  'claude-opus-4-6':             { input: 15.00, output: 75.00 },
+  // Gemini
+  'gemini-2.5-pro':              { input: 1.25,  output: 10.00 },
+  'gemini-2.5-flash':            { input: 0.30,  output: 2.50  },
+  'gemini-2.5-flash-lite':       { input: 0.10,  output: 0.40  },
+  // OpenAI
+  'gpt-5':                       { input: 1.25,  output: 10.00 },
+  'gpt-4.1':                     { input: 2.00,  output: 8.00  },
+  'gpt-4.1-mini':                { input: 0.40,  output: 1.60  },
+  'gpt-4.1-nano':                { input: 0.10,  output: 0.40  },
+  'gpt-4o':                      { input: 2.50,  output: 10.00 },
+  'gpt-4o-mini':                 { input: 0.15,  output: 0.60  },
+  // Ollama (무료)
+  'gemma2:9b':                   { input: 0, output: 0 },
+};
+
 /** UI 표시용 프리셋 메타 정보 */
 export const PRESET_INFO: Record<QualityPreset, { label: string; description: string; detail: string }> = {
   standard: {
