@@ -31,14 +31,26 @@ export function parseChartJson(raw: string): ChartData | null {
     // data 배열 항목 검증 + 정규화
     for (const item of parsed.data) {
       if (typeof item !== 'object' || item === null) return null;
-      // subject→name 매핑 (radar 차트에서 LLM이 subject 키를 사용하는 경우)
+      // subject→name / label→name 매핑 (LLM이 다른 키를 사용하는 경우)
       if (typeof item.name !== 'string' && typeof item.subject === 'string') {
         item.name = item.subject;
         delete item.subject;
       }
+      if (typeof item.name !== 'string' && typeof item.label === 'string') {
+        item.name = item.label;
+        delete item.label;
+      }
       if (typeof item.name !== 'string') return null;
       // name 값의 줄바꿈 제거 (모든 차트 타입 공통)
       item.name = item.name.replace(/\n/g, ' ');
+
+      // 숫자형 문자열 → number 자동 변환 (LLM이 "value": "35" 같이 출력하는 경우)
+      for (const key of Object.keys(item)) {
+        if (key === 'name') continue;
+        if (typeof item[key] === 'string' && item[key].trim() !== '' && !isNaN(Number(item[key]))) {
+          item[key] = Number(item[key]);
+        }
+      }
     }
 
     return parsed as ChartData;

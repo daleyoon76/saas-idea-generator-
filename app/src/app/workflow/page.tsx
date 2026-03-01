@@ -237,17 +237,33 @@ function renderChartSvg(chart: import('@/lib/chart-schema').ChartData): string {
     if (seriesKeys.length === 0 && chart.data.some(d => d.value !== undefined)) seriesKeys.push('value');
 
     let maxVal = 0;
-    for (const d of chart.data) for (const k of seriesKeys) { const v = Number(d[k] ?? 0); if (v > maxVal) maxVal = v; }
-    if (maxVal === 0) maxVal = 1;
-    const niceMax = Math.ceil(maxVal / Math.pow(10, Math.floor(Math.log10(maxVal)))) * Math.pow(10, Math.floor(Math.log10(maxVal)));
+    let minVal = 0;
+    for (const d of chart.data) for (const k of seriesKeys) { const v = Number(d[k] ?? 0); if (v > maxVal) maxVal = v; if (v < minVal) minVal = v; }
+    if (maxVal === 0 && minVal === 0) maxVal = 1;
+
+    const niceRound = (v: number) => {
+      if (v === 0) return 0;
+      const abs = Math.abs(v);
+      const mag = Math.pow(10, Math.floor(Math.log10(abs)));
+      return Math.sign(v) * Math.ceil(abs / mag) * mag;
+    };
+    const niceMax = niceRound(maxVal) || 1;
+    const niceMin = niceRound(minVal);
+    const range = niceMax - niceMin;
 
     // y-axis grid + labels
     const ticks = 5;
     for (let i = 0; i <= ticks; i++) {
       const y = PAD.top + plotH - (i / ticks) * plotH;
-      const val = Math.round((i / ticks) * niceMax);
+      const val = Math.round(niceMin + (i / ticks) * range);
       body += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left + plotW}" y2="${y}" stroke="${CANYON.border}" stroke-dasharray="3 3"/>`;
       body += `<text x="${PAD.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="${CANYON.textMid}">${val}</text>`;
+    }
+
+    // 음수 데이터 존재 시 0 기준선 표시
+    if (niceMin < 0) {
+      const zeroY = PAD.top + plotH - ((0 - niceMin) / range) * plotH;
+      body += `<line x1="${PAD.left}" y1="${zeroY}" x2="${PAD.left + plotW}" y2="${zeroY}" stroke="${CANYON.textDark}" stroke-width="1.5"/>`;
     }
 
     const n = chart.data.length;
@@ -259,9 +275,12 @@ function renderChartSvg(chart: import('@/lib/chart-schema').ChartData): string {
         const cx = PAD.left + i * groupW + groupW / 2;
         seriesKeys.forEach((k, si) => {
           const v = Number(d[k] ?? 0);
-          const barH = (v / niceMax) * plotH;
+          const yPos = PAD.top + plotH - ((v - niceMin) / range) * plotH;
+          const zeroPos = PAD.top + plotH - ((0 - niceMin) / range) * plotH;
+          const barTop = Math.min(yPos, zeroPos);
+          const barH = Math.abs(yPos - zeroPos);
           const bx = cx - (seriesKeys.length * barW) / 2 + si * barW;
-          body += `<rect x="${bx}" y="${PAD.top + plotH - barH}" width="${barW}" height="${barH}" fill="${colors[si % colors.length]}" rx="2"/>`;
+          body += `<rect x="${bx}" y="${barTop}" width="${barW}" height="${Math.max(barH, 1)}" fill="${colors[si % colors.length]}" rx="2"/>`;
         });
         body += `<text x="${cx}" y="${PAD.top + plotH + 16}" text-anchor="middle" font-size="10" fill="${CANYON.textMid}">${esc(d.name)}</text>`;
       });
@@ -270,13 +289,13 @@ function renderChartSvg(chart: import('@/lib/chart-schema').ChartData): string {
       seriesKeys.forEach((k, si) => {
         const pts = chart.data.map((d, i) => {
           const x = PAD.left + i * groupW + groupW / 2;
-          const y = PAD.top + plotH - (Number(d[k] ?? 0) / niceMax) * plotH;
+          const y = PAD.top + plotH - ((Number(d[k] ?? 0) - niceMin) / range) * plotH;
           return `${x},${y}`;
         });
         body += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[si % colors.length]}" stroke-width="2"/>`;
         chart.data.forEach((d, i) => {
           const x = PAD.left + i * groupW + groupW / 2;
-          const y = PAD.top + plotH - (Number(d[k] ?? 0) / niceMax) * plotH;
+          const y = PAD.top + plotH - ((Number(d[k] ?? 0) - niceMin) / range) * plotH;
           body += `<circle cx="${x}" cy="${y}" r="3" fill="${colors[si % colors.length]}"/>`;
         });
       });
@@ -1215,6 +1234,7 @@ function WorkflowPageInner() {
         if (lang === 'chart') {
           // chart JSON → 정적 SVG → PNG 임베딩
           const chartData = parseChartJson(blockLines.join('\n'));
+          let chartRendered = false;
           if (chartData) {
             const svgStr = renderChartSvg(chartData);
             const img = await svgToPng(svgStr);
@@ -1227,6 +1247,17 @@ function WorkflowPageInner() {
                 children: [new ImageRun({ data: img.data, transformation: { width: finalW, height: finalH }, type: 'png' })],
                 alignment: AlignmentType.CENTER,
                 spacing: { before: 200, after: 200 },
+              }));
+              chartRendered = true;
+            }
+          }
+          // 실패 시 원본 JSON을 코드 블록 스타일로 폴백 출력
+          if (!chartRendered) {
+            for (const codeLine of blockLines) {
+              children.push(new Paragraph({
+                children: [new TextRun({ text: codeLine, size: 18, color: DC.textMid, font: { name: 'Consolas', eastAsia: '맑은 고딕', cs: '맑은 고딕' } })],
+                shading: { type: ShadingType.CLEAR, fill: 'F5EDE6', color: 'auto' },
+                spacing: { after: 20 },
               }));
             }
           }
