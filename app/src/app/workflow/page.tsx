@@ -45,6 +45,9 @@ import { CANYON, CANYON_DOCX } from '@/lib/colors';
 import { parseChartJson } from '@/lib/chart-schema';
 import { renderChartSvg } from '@/lib/chart-svg';
 import ChartRenderer from '@/components/ChartRenderer';
+import SourceLink from '@/components/SourceLink';
+import { useLinkChecker } from '@/lib/useLinkChecker';
+import { extractUrlsFromMarkdown, classifyUrl, buildSummary, type LinkStatus, type CredibilityTier } from '@/lib/source-credibility';
 
 /** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
 function sanitizeMermaidSyntax(src: string, level: number = 0): string {
@@ -336,6 +339,17 @@ function WorkflowPageInner() {
   // 기획서 Import 컨텍스트 (guided 페이지에서 import 시 전달됨)
   const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
+
+  // ── 출처 링크 체커: 현재 표시 중인 콘텐츠의 URL을 비동기로 검증 ──
+  const visibleContent =
+    step === 'view-full-plan' && fullBusinessPlans[currentFullPlanIndex]
+      ? fullBusinessPlans[currentFullPlanIndex].content
+      : step === 'view-prd' && prds[currentPRDIndex]
+        ? prds[currentPRDIndex].content
+        : step === 'view-plan' && businessPlans[currentPlanIndex]
+          ? businessPlans[currentPlanIndex].content
+          : '';
+  const linkStatusMap = useLinkChecker(visibleContent);
 
   useEffect(() => {
     checkProviders();
@@ -2049,6 +2063,58 @@ function WorkflowPageInner() {
 
   const C = CANYON;
 
+  /** 출처 신뢰도 요약 패널 (접이식) */
+  function SourceCredibilitySummary({ content }: { content: string }) {
+    const urls = extractUrlsFromMarkdown(content);
+    if (urls.length === 0) return null;
+    const summary = buildSummary(urls, linkStatusMap);
+    const tierEntries = ([1, 2, 3, 4, 5] as CredibilityTier[])
+      .filter(t => summary.byTier[t] > 0)
+      .map(t => {
+        const info = classifyUrl(urls.find(u => classifyUrl(u).tier === t) || '');
+        return { ...info, tier: t, count: summary.byTier[t] };
+      });
+
+    return (
+      <details className="my-4 rounded-xl text-sm" style={{ backgroundColor: C.selectedBg, border: `1px solid ${C.border}` }}>
+        <summary className="cursor-pointer px-4 py-2.5 font-semibold select-none" style={{ color: C.textDark }}>
+          출처 신뢰도 요약 — {summary.total}개 링크
+          {summary.dead > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
+              깨진 링크 {summary.dead}개
+            </span>
+          )}
+          {summary.checking > 0 && (
+            <span className="ml-1 text-xs" style={{ color: C.textLight }}>
+              (확인 중 {summary.checking}개)
+            </span>
+          )}
+        </summary>
+        <div className="px-4 pb-3 pt-1 flex flex-wrap gap-3">
+          {tierEntries.map(e => (
+            <span key={e.tier} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: e.bgColor, color: e.color, border: `1px solid ${e.color}20` }}>
+              <span style={{ fontSize: '8px' }}>●</span>
+              {e.label}: {e.count}개
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: '#E8F5E9', color: '#3D8B37' }}>
+            ✓ 정상: {summary.alive}개
+          </span>
+          {summary.dead > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
+              ✗ 깨짐: {summary.dead}개
+            </span>
+          )}
+          {summary.unknown > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: '#F5F5F5', color: '#888' }}>
+              ? 불명: {summary.unknown}개
+            </span>
+          )}
+        </div>
+      </details>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
 
@@ -2538,7 +2604,7 @@ function WorkflowPageInner() {
                     tr: ({ children }) => <tr style={{ ['&:hover' as string]: { backgroundColor: C.selectedBg } }}>{children}</tr>,
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
                     img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
@@ -2556,6 +2622,8 @@ function WorkflowPageInner() {
                   {sanitizeMarkdown(businessPlans[currentPlanIndex].content)}
                 </ReactMarkdown>
               </div>
+
+              <SourceCredibilitySummary content={businessPlans[currentPlanIndex].content} />
 
               <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
                 <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
@@ -2753,7 +2821,7 @@ function WorkflowPageInner() {
                     tr: ({ children }) => <tr>{children}</tr>,
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
                     img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
@@ -2771,6 +2839,8 @@ function WorkflowPageInner() {
                   {sanitizeMarkdown(fullBusinessPlans[currentFullPlanIndex].content)}
                 </ReactMarkdown>
               </div>
+
+              <SourceCredibilitySummary content={fullBusinessPlans[currentFullPlanIndex].content} />
 
               <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
                 <button onClick={() => setStep('view-plan')} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>초안 보기</button>
@@ -2863,7 +2933,7 @@ function WorkflowPageInner() {
                     tr: ({ children }) => <tr>{children}</tr>,
                     th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
                     td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-sm" style={{ color: C.accent }}>{children}</a>,
+                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
                     img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
                     hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
                     blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
@@ -2879,6 +2949,8 @@ function WorkflowPageInner() {
                   }}>{sanitizeMarkdown(prds[currentPRDIndex].content)}</ReactMarkdown>
                 )}
               </div>
+
+              <SourceCredibilitySummary content={prds[currentPRDIndex].content} />
 
               <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
                 <button onClick={() => setStep('view-plan')} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>사업기획서로 돌아가기</button>
