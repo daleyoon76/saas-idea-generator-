@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit, Noto_Sans_KR, Geist_Mono } from "next/font/google";
+import AuthProvider from "@/components/AuthProvider";
 import "./globals.css";
 
 // 영문 — 기하학적 모던 산세리프
@@ -40,7 +41,9 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${notoSansKR.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

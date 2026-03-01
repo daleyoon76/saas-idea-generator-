@@ -48,6 +48,7 @@ import ChartRenderer from '@/components/ChartRenderer';
 import SourceLink from '@/components/SourceLink';
 import { useLinkChecker } from '@/lib/useLinkChecker';
 import { extractUrlsFromMarkdown, classifyUrl, buildSummary, type LinkStatus, type CredibilityTier } from '@/lib/source-credibility';
+import UserMenu from '@/components/UserMenu';
 
 /** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
 function sanitizeMermaidSyntax(src: string, level: number = 0): string {
@@ -2163,21 +2164,24 @@ function WorkflowPageInner() {
             </div>
             <span className="font-semibold text-sm" style={{ color: C.textDark }}>My CSO</span>
           </Link>
-          {/* 프리셋 상태 */}
-          <div className="text-xs">
-            {availableProviders.claude === null ? (
-              <span style={{ color: C.textLight }}>확인 중...</span>
-            ) : isProviderReady() ? (
-              <span className="flex items-center gap-1" style={{ color: C.success }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                {PRESET_INFO[selectedPreset].label} 모드
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-red-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
-                API 키 미설정
-              </span>
-            )}
+          {/* 프리셋 상태 + 사용자 메뉴 */}
+          <div className="flex items-center gap-3">
+            <div className="text-xs">
+              {availableProviders.claude === null ? (
+                <span style={{ color: C.textLight }}>확인 중...</span>
+              ) : isProviderReady() ? (
+                <span className="flex items-center gap-1" style={{ color: C.success }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  {PRESET_INFO[selectedPreset].label} 모드
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-red-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+                  API 키 미설정
+                </span>
+              )}
+            </div>
+            <UserMenu />
           </div>
         </div>
       </nav>
