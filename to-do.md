@@ -52,7 +52,6 @@
   - [x] 사용자별 아이디어/기획서/PRD 자동 저장 (워크플로우 4곳 fire-and-forget) ✅
   - [x] 히스토리 조회 API (`/api/ideas`, `/api/ideas/[id]`, `/api/plans`, `/api/prds`) ✅
   - [x] Application-level RLS (모든 쿼리 userId 스코핑) ✅
-  - [ ] 기획서 버전 관리 (초안 vs 풀버전 vs 수정본) — 대시보드와 함께 구현 예정
 - [ ] **사용자 인증 (Phase B)** — DB 연동 후
   - [ ] PrismaAdapter 연결 (auth.ts에 `adapter: PrismaAdapter(prisma)` 추가)
   - [ ] DB 세션 전략 전환 (JWT → database session)
@@ -63,6 +62,7 @@
 - [ ] **대시보드**
   - 내 기획서 목록 (생성일, 상태, 모델)
   - 기획서 재열기·수정·재생성
+  - 기획서 버전 관리 (초안 vs 풀버전 vs 수정본, diff 뷰, 롤백)
 - [ ] **Google API 연동**
   - Google Docs/Sheets 저장
   - Google Slides 생성
