@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Idea {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  keyword         String?
+  localId         Int      @map("local_id")
+  name            String
+  category        String
+  oneLiner        String   @map("one_liner")
+  target          String
+  problem         String
+  features        String[]
+  differentiation String
+  revenueModel    String   @map("revenue_model")
+  mvpDifficulty   String   @map("mvp_difficulty")
+  rationale       String
+  preset          String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  businessPlans BusinessPlan[]
+  prds          PRD[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ideas")
+}
+
+model BusinessPlan {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  ideaId    String   @map("idea_id")
+  ideaName  String   @map("idea_name")
+  content   String
+  version   String   @default("draft")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([ideaId])
+  @@map("business_plans")
+}
+
+model PRD {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  ideaId    String   @map("idea_id")
+  ideaName  String   @map("idea_name")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([ideaId])
+  @@map("prds")
+}

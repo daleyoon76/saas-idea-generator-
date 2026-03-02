@@ -27,6 +27,58 @@ export interface PRD {
   createdAt: string;
 }
 
+// ── DB 저장용 타입 (히스토리/대시보드) ──
+
+export interface SavedIdeaSummary {
+  id: string;
+  localId: number;
+  keyword: string | null;
+  name: string;
+  category: string;
+  oneLiner: string;
+  preset: string | null;
+  createdAt: string;
+  _count: {
+    businessPlans: number;
+    prds: number;
+  };
+}
+
+export interface SavedBusinessPlan {
+  id: string;
+  ideaName: string;
+  version: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface SavedPRD {
+  id: string;
+  ideaName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface SavedIdeaDetail extends Omit<SavedIdeaSummary, '_count'> {
+  target: string;
+  problem: string;
+  features: string[];
+  differentiation: string;
+  revenueModel: string;
+  mvpDifficulty: string;
+  rationale: string;
+  businessPlans: SavedBusinessPlan[];
+  prds: SavedPRD[];
+}
+
+export interface HistoryResponse {
+  ideas: SavedIdeaSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export type WorkflowStep =
   | 'keyword'
   | 'generating-ideas'

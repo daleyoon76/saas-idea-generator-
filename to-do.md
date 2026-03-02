@@ -45,16 +45,18 @@
   - [x] 전 페이지 UserMenu (로그인/프로필/로그아웃) 배치 ✅
   - [x] 커스텀 로그인 페이지 (CANYON 팔레트) ✅
   - [x] 미로그인 사용자 기존 기능 100% 사용 가능 (Phase A) ✅
-  - [ ] 네이버/카카오 소셜 로그인 추가 (provider만 추가하면 완료)
+  - [x] 네이버/카카오 소셜 로그인 추가 (provider만 추가하면 완료)
 
-- [ ] **데이터베이스 + 히스토리**
-  - PostgreSQL (Supabase 또는 Neon)
-  - 사용자별 아이디어/기획서/PRD 저장·조회
-  - 기획서 버전 관리 (초안 vs 풀버전 vs 수정본)
+- [x] **데이터베이스 + 히스토리** ✅
+  - [x] Supabase PostgreSQL + Prisma v7 (PrismaPg 어댑터) ✅
+  - [x] 사용자별 아이디어/기획서/PRD 자동 저장 (워크플로우 4곳 fire-and-forget) ✅
+  - [x] 히스토리 조회 API (`/api/ideas`, `/api/ideas/[id]`, `/api/plans`, `/api/prds`) ✅
+  - [x] Application-level RLS (모든 쿼리 userId 스코핑) ✅
+  - [ ] 기획서 버전 관리 (초안 vs 풀버전 vs 수정본) — 대시보드와 함께 구현 예정
 - [ ] **사용자 인증 (Phase B)** — DB 연동 후
   - [ ] PrismaAdapter 연결 (auth.ts에 `adapter: PrismaAdapter(prisma)` 추가)
   - [ ] DB 세션 전략 전환 (JWT → database session)
-  - [ ] API 라우트 보호 — 저장/히스토리 API에 `auth()` 세션 체크 추가
+  - [x] API 라우트 보호 — 저장/히스토리 API에 `auth()` 세션 체크 추가 ✅ (DB API 전체 적용됨)
   - [ ] middleware.ts matcher 확장 (`/dashboard`, `/api/save-plan` 등 보호)
   - [ ] 미로그인 사용자: 기획서 생성은 가능, 저장/히스토리는 로그인 필요
 
@@ -72,6 +74,11 @@
   - 예비창업패키지·초기창업패키지·창업성장기술개발·TIPS 등 주요 5개 양식
   - 가장 간단한 것 먼저 진행
 - [ ] **발표자료 자동 생성** — 사업기획서 14개 섹션 → 10~15슬라이드 자동 변환
+
+### 기술 부채
+
+- [ ] **Next.js 16 middleware → proxy 마이그레이션** — `middleware.ts` deprecated 경고 발생 중 (동작에는 문제 없음). Next.js의 새 `proxy` convention으로 전환 필요
+- [ ] **출력 잘림 대응 고도화** — LLM 응답이 토큰 한도에 걸려 잘릴 때 자동 continuation/retry 로직 강화 (현재는 잘림 경고만 표시)
 
 ### Phase 3: 클라우드 세팅
 

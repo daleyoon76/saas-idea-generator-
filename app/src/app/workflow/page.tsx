@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
 // 단계별 기본 예상 소요 시간 (ms) — localStorage에 실측값이 쌓이면 자동으로 갱신됨
 const DEFAULT_STEP_MS = {
@@ -68,6 +69,17 @@ function sanitizeMermaidSyntax(src: string, level: number = 0): string {
     .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt)\b[^;\n]*);/gm, '$1')
     // trailing 빈 줄 정리
     .replace(/\n{3,}/g, '\n\n');
+
+  // 고아 end 제거: subgraph 없이 end만 있으면 파싱 에러 발생
+  const subgraphCount = (result.match(/^\s*subgraph\b/gm) || []).length;
+  const endCount = (result.match(/^\s*end\s*$/gm) || []).length;
+  if (endCount > subgraphCount) {
+    let surplus = endCount - subgraphCount;
+    result = result.replace(/^\s*end\s*$/gm, (m) => {
+      if (surplus > 0) { surplus--; return ''; }
+      return m;
+    });
+  }
 
   // 리터럴 \n → <br/> (Mermaid 줄바꿈). 실제 개행(\n 문자)과 구별됨.
   result = result.replace(/\\n/g, '<br/>');
@@ -299,7 +311,10 @@ function MermaidDiagram({ chart }: { chart: string }) {
 function WorkflowPageInner() {
   const searchParams = useSearchParams();
   const routerNav = useRouter();
+  const { data: session } = useSession();
   const [step, setStep] = useState<WorkflowStep>('keyword');
+  // DB 아이디어 ID 매핑 (localId → dbId)
+  const [dbIdeaMap, setDbIdeaMap] = useState<Record<number, string>>({});
   const [keyword, setKeyword] = useState('');
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [selectedIdeas, setSelectedIdeas] = useState<number[]>([]);
@@ -340,6 +355,32 @@ function WorkflowPageInner() {
   // 기획서 Import 컨텍스트 (guided 페이지에서 import 시 전달됨)
   const [importedPlanContent, setImportedPlanContent] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
+
+  // ── DB 자동저장 (fire-and-forget, 실패해도 UI 흐름 무방해) ──
+  const autoSaveToDb = useCallback(async <T,>(
+    endpoint: string,
+    body: T,
+    label: string,
+  ): Promise<Record<string, unknown> | null> => {
+    if (!session?.user?.id) return null;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        console.warn(`[DB 저장 실패] ${label}:`, await res.text());
+        return null;
+      }
+      const data = await res.json();
+      console.log(`[DB 저장 완료] ${label}`);
+      return data;
+    } catch (err) {
+      console.warn(`[DB 저장 오류] ${label}:`, err);
+      return null;
+    }
+  }, [session?.user?.id]);
 
   // ── 출처 링크 체커: 현재 표시 중인 콘텐츠의 URL을 비동기로 검증 ──
   const visibleContent =
@@ -748,6 +789,22 @@ function WorkflowPageInner() {
           rationale: idea.rationale || '-',
         }));
         setIdeas(validIdeas);
+        // DB 자동저장: 아이디어 (validIdeas가 이 스코프 안에서만 유효)
+        if (validIdeas.length > 0) {
+          autoSaveToDb('/api/ideas', {
+            ideas: validIdeas,
+            keyword,
+            preset: selectedPreset,
+          }, `아이디어 ${validIdeas.length}건`).then(data => {
+            if (data?.saved && Array.isArray(data.saved)) {
+              const map: Record<number, string> = {};
+              for (const s of data.saved as { id: string; localId: number }[]) {
+                map[s.localId] = s.id;
+              }
+              setDbIdeaMap(map);
+            }
+          });
+        }
       } else {
         // Fallback: create placeholder ideas if parsing fails
         setIdeas([
@@ -887,6 +944,22 @@ function WorkflowPageInner() {
         setLastGenTime({ seconds: secs, label: `${PRESET_INFO[selectedPreset].label} 모드` });
       }
       setStep('view-plan');
+
+      // DB 자동저장: 초안 기획서
+      for (const plan of plans) {
+        const idea = ideas.find(i => i.id === plan.ideaId);
+        autoSaveToDb('/api/plans', {
+          plan: { ...plan, version: 'draft' },
+          idea,
+          keyword,
+          preset: selectedPreset,
+          dbIdeaId: dbIdeaMap[plan.ideaId],
+        }, `초안: ${plan.ideaName}`).then(data => {
+          if (data?.dbIdeaId && plan.ideaId) {
+            setDbIdeaMap(prev => ({ ...prev, [plan.ideaId]: data.dbIdeaId as string }));
+          }
+        });
+      }
     } catch (err) {
       if (controller.signal.aborted) {
         setStep('select-ideas');
@@ -1355,6 +1428,19 @@ function WorkflowPageInner() {
       setProgressCurrent(1);
       setCompletedSteps([`"${idea.name}" PRD 작성 완료`]);
       setStep('view-prd');
+
+      // DB 자동저장: PRD
+      autoSaveToDb('/api/prds', {
+        prd: newPRD,
+        idea,
+        keyword,
+        preset: selectedPreset,
+        dbIdeaId: dbIdeaMap[idea.id],
+      }, `PRD: ${idea.name}`).then(data => {
+        if (data?.dbIdeaId && idea.id) {
+          setDbIdeaMap(prev => ({ ...prev, [idea.id]: data.dbIdeaId as string }));
+        }
+      });
     } catch (err) {
       { console.error('[오류]', err); setError(err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err) || '알 수 없는 오류'); }
       setStep(returnStep);
@@ -1671,6 +1757,19 @@ function WorkflowPageInner() {
       setFullBusinessPlans(newPlans);
       setCurrentFullPlanIndex(newPlans.length - 1);
       setStep('view-full-plan');
+
+      // DB 자동저장: 풀버전 기획서
+      autoSaveToDb('/api/plans', {
+        plan: { ...newFullPlan, version: 'full' },
+        idea,
+        keyword,
+        preset: selectedPreset,
+        dbIdeaId: dbIdeaMap[idea.id],
+      }, `풀버전: ${idea.name}`).then(data => {
+        if (data?.dbIdeaId && idea.id) {
+          setDbIdeaMap(prev => ({ ...prev, [idea.id]: data.dbIdeaId as string }));
+        }
+      });
     } catch (err) {
       if (controller.signal.aborted) {
         setStep('view-plan');
@@ -1755,6 +1854,22 @@ function WorkflowPageInner() {
       setFullBusinessPlans(newPlans);
       setCurrentFullPlanIndex(prevFiltered.length); // 첫 번째 새 플랜으로
       setStep('view-full-plan');
+
+      // DB 자동저장: 배치 풀버전 기획서
+      for (const plan of allNewPlans) {
+        const idea = ideas.find(i => i.id === plan.ideaId);
+        autoSaveToDb('/api/plans', {
+          plan: { ...plan, version: 'full' },
+          idea,
+          keyword,
+          preset: selectedPreset,
+          dbIdeaId: dbIdeaMap[plan.ideaId],
+        }, `풀버전: ${plan.ideaName}`).then(data => {
+          if (data?.dbIdeaId && plan.ideaId) {
+            setDbIdeaMap(prev => ({ ...prev, [plan.ideaId]: data.dbIdeaId as string }));
+          }
+        });
+      }
     } else {
       setError(`모든 기획서 생성에 실패했습니다: ${failedNames.join(', ')}`);
       setStep('view-plan');
