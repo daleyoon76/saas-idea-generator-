@@ -7,160 +7,160 @@
 
 ### Phase 1: 알고리즘 강화 및 품질 개선
 
-- [x] <span style="color:#9ca3af">~~**경쟁 분석**~~</span>
-  - [x] <span style="color:#9ca3af">~~Manus AI 기능/가격 분석 → 보완점 도출~~</span>
-  - [x] <span style="color:#9ca3af">~~기타 경쟁 서비스 리스트업~~</span>
-- [x] <span style="color:#9ca3af">~~**에이전트 파이프라인 안정화** ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Devil's Advocate RISK_SUMMARY → Section 1 삽입 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~초안을 풀버전 에이전트 컨텍스트로 제공 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~섹션 추출 강화 (누락/순서 뒤바뀜 감지 개선) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~에이전트 실패 복구 (개별 재시도 / 부분 결과 보존) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~섹션 경계 탐지 버그 수정 (`###` 서브섹션을 섹션 경계로 오인 → H2만 경계) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Devil's Advocate 분량 최적화 (프롬프트 간결성 지시 + 토큰 6K) ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**검색 품질 강화** ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Tavily 쿼리 최적화 (하드코딩 → LLM 동적 생성 + 폴백) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~검색 결과 캐싱 (서버 사이드 Map, TTL 24h, 최대 500건) ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**검색 소스 확장** ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~네이버 Search API 연동 (블로그·뉴스 5-way 병렬 수집, 한국 시장 동향 프롬프트 주입) ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**출력물 품질 관리**~~</span>
-  - [x] <span style="color:#9ca3af">~~서버 출력 검증 (LLM 잘림 감지 + 섹션 누락 경고 + blockquote 경고) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Mermaid 렌더 실패 시 안내 메시지 표시 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Mermaid 괄호 파싱 안정화 — `[]`, `{}`, `subgraph` 이름 내 `()` 자동 이스케이프 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~표 렌더링 수정 — 불릿 리스트 안 들여쓰기된 표가 텍스트로 나오는 문제 해결 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~docx 서식 확장 — 이탤릭, 인라인 코드, 블록인용(>), 다단계 리스트~~</span>
-  - [x] <span style="color:#9ca3af">~~차트 렌더링 품질 검증 (bar/pie/line/scatter/radar `chart` 코드블록) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~docx 차트/다이어그램 임베딩 품질 확인 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~출처 URL 자동 검증(dead link 체크) + 출처 신뢰도 등급(정부통계 > 뉴스 > 블로그) 시각화 ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**Devil's Advocate 강화** — `docs/agents_jd.md` DA 지시문 수정 (파이프라인 구조 변경 없음) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~한국형 규제 리스크 자동 점검 — 인허가, 개인정보보호법, 전자상거래법 등 체크리스트 추가 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~스트레스 테스트 시나리오 — '경쟁사 가격 20% 인하', '핵심 인력 이탈' 등 자동 시뮬레이션 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~A/B 비교: 기존 DA vs 수정 DA 기획서 품질 확인 (6K→8K 토큰 상향, 테스트 12개 추가) ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**테스트 프레임워크 도입** ✅ — Vitest 204개 테스트, 커버리지 64%, Playwright 설정 완료~~</span>
+- [x] **경쟁 분석**
+  - [x] Manus AI 기능/가격 분석 → 보완점 도출
+  - [x] 기타 경쟁 서비스 리스트업
+- [x] **에이전트 파이프라인 안정화** ✅
+  - [x] Devil's Advocate RISK_SUMMARY → Section 1 삽입 ✅
+  - [x] 초안을 풀버전 에이전트 컨텍스트로 제공 ✅
+  - [x] 섹션 추출 강화 (누락/순서 뒤바뀜 감지 개선) ✅
+  - [x] 에이전트 실패 복구 (개별 재시도 / 부분 결과 보존) ✅
+  - [x] 섹션 경계 탐지 버그 수정 (`###` 서브섹션을 섹션 경계로 오인 → H2만 경계) ✅
+  - [x] Devil's Advocate 분량 최적화 (프롬프트 간결성 지시 + 토큰 6K) ✅
+- [x] **검색 품질 강화** ✅
+  - [x] Tavily 쿼리 최적화 (하드코딩 → LLM 동적 생성 + 폴백) ✅
+  - [x] 검색 결과 캐싱 (서버 사이드 Map, TTL 24h, 최대 500건) ✅
+- [x] **검색 소스 확장** ✅
+  - [x] 네이버 Search API 연동 (블로그·뉴스 5-way 병렬 수집, 한국 시장 동향 프롬프트 주입) ✅
+- [x] **출력물 품질 관리**
+  - [x] 서버 출력 검증 (LLM 잘림 감지 + 섹션 누락 경고 + blockquote 경고) ✅
+  - [x] Mermaid 렌더 실패 시 안내 메시지 표시 ✅
+  - [x] Mermaid 괄호 파싱 안정화 — `[]`, `{}`, `subgraph` 이름 내 `()` 자동 이스케이프 ✅
+  - [x] 표 렌더링 수정 — 불릿 리스트 안 들여쓰기된 표가 텍스트로 나오는 문제 해결 ✅
+  - [x] docx 서식 확장 — 이탤릭, 인라인 코드, 블록인용(>), 다단계 리스트
+  - [x] 차트 렌더링 품질 검증 (bar/pie/line/scatter/radar `chart` 코드블록) ✅
+  - [x] docx 차트/다이어그램 임베딩 품질 확인 ✅
+  - [x] 출처 URL 자동 검증(dead link 체크) + 출처 신뢰도 등급(정부통계 > 뉴스 > 블로그) 시각화 ✅
+- [x] **Devil's Advocate 강화** — `docs/agents_jd.md` DA 지시문 수정 (파이프라인 구조 변경 없음) ✅
+  - [x] 한국형 규제 리스크 자동 점검 — 인허가, 개인정보보호법, 전자상거래법 등 체크리스트 추가 ✅
+  - [x] 스트레스 테스트 시나리오 — '경쟁사 가격 20% 인하', '핵심 인력 이탈' 등 자동 시뮬레이션 ✅
+  - [x] A/B 비교: 기존 DA vs 수정 DA 기획서 품질 확인 (6K→8K 토큰 상향, 테스트 12개 추가) ✅
+- [x] **테스트 프레임워크 도입** ✅ — Vitest 204개 테스트, 커버리지 64%, Playwright 설정 완료
 
 ### Phase 2: 추가 기능 구현
-- [x] <span style="color:#9ca3af">~~**에이전트 간 토큰 예산 최적화** ✅ — 3x→프로덕션 전환 (14K/16K/6K), 프롬프트 분량 제어 병행~~</span>
-- [x] <span style="color:#9ca3af">~~**사용자 인증 (Phase A)** ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~NextAuth.js v5 (Auth.js) + Google OAuth 2.0 연동 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~JWT 세션 전략 (DB 없이 동작, 추후 adapter 추가 가능) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~전 페이지 UserMenu (로그인/프로필/로그아웃) 배치 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~커스텀 로그인 페이지 (CANYON 팔레트) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~미로그인 사용자 기존 기능 100% 사용 가능 (Phase A) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~네이버/카카오 소셜 로그인 추가 (provider만 추가하면 완료)~~</span>
+- [x] **에이전트 간 토큰 예산 최적화** ✅ — 3x→프로덕션 전환 (14K/16K/6K), 프롬프트 분량 제어 병행
+- [x] **사용자 인증 (Phase A)** ✅
+  - [x] NextAuth.js v5 (Auth.js) + Google OAuth 2.0 연동 ✅
+  - [x] JWT 세션 전략 (DB 없이 동작, 추후 adapter 추가 가능) ✅
+  - [x] 전 페이지 UserMenu (로그인/프로필/로그아웃) 배치 ✅
+  - [x] 커스텀 로그인 페이지 (CANYON 팔레트) ✅
+  - [x] 미로그인 사용자 기존 기능 100% 사용 가능 (Phase A) ✅
+  - [x] 네이버/카카오 소셜 로그인 추가 (provider만 추가하면 완료)
 
-- [x] <span style="color:#9ca3af">~~**데이터베이스 + 히스토리** ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Supabase PostgreSQL + Prisma v7 (PrismaPg 어댑터) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~사용자별 아이디어/기획서/PRD 자동 저장 (워크플로우 4곳 fire-and-forget) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~히스토리 조회 API (`/api/ideas`, `/api/ideas/[id]`, `/api/plans`, `/api/prds`) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Application-level RLS (모든 쿼리 userId 스코핑) ✅~~</span>
-- [x] <span style="color:#9ca3af">~~**사용자 인증 (Phase B)** — DB 연동 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~PrismaAdapter 연결 (User/Account/Session/VerificationToken 모델 + auth.ts adapter 추가) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~JWT 세션 전략 유지 (DB 세션 전환은 필요 시 한 줄 변경으로 가능) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~API 라우트 보호 — 저장/히스토리 API에 `auth()` 세션 체크 추가 ✅ (DB API 전체 적용됨)~~</span>
-  - [x] <span style="color:#9ca3af">~~middleware.ts matcher 확장 (`/dashboard`, `/api/ideas`, `/api/plans`, `/api/prds` 보호) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~미로그인 사용자: 기획서 생성 가능, 저장/히스토리는 로그인 필요 (UI 힌트 3곳 추가) ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~기존 provider sub 기반 데이터 → 새 DB userId로 자동 마이그레이션 콜백 ✅~~</span>
+- [x] **데이터베이스 + 히스토리** ✅
+  - [x] Supabase PostgreSQL + Prisma v7 (PrismaPg 어댑터) ✅
+  - [x] 사용자별 아이디어/기획서/PRD 자동 저장 (워크플로우 4곳 fire-and-forget) ✅
+  - [x] 히스토리 조회 API (`/api/ideas`, `/api/ideas/[id]`, `/api/plans`, `/api/prds`) ✅
+  - [x] Application-level RLS (모든 쿼리 userId 스코핑) ✅
+- [x] **사용자 인증 (Phase B)** — DB 연동 ✅
+  - [x] PrismaAdapter 연결 (User/Account/Session/VerificationToken 모델 + auth.ts adapter 추가) ✅
+  - [x] JWT 세션 전략 유지 (DB 세션 전환은 필요 시 한 줄 변경으로 가능) ✅
+  - [x] API 라우트 보호 — 저장/히스토리 API에 `auth()` 세션 체크 추가 ✅ (DB API 전체 적용됨)
+  - [x] middleware.ts matcher 확장 (`/dashboard`, `/api/ideas`, `/api/plans`, `/api/prds` 보호) ✅
+  - [x] 미로그인 사용자: 기획서 생성 가능, 저장/히스토리는 로그인 필요 (UI 힌트 3곳 추가) ✅
+  - [x] 기존 provider sub 기반 데이터 → 새 DB userId로 자동 마이그레이션 콜백 ✅
 
-- [ ] <span style="color:#c2410c">**대시보드**</span>
-  - <span style="color:#6b7280">내 기획서 목록 (생성일, 상태, 모델)</span>
-  - <span style="color:#6b7280">기획서 재열기·수정·재생성</span>
-  - <span style="color:#6b7280">기획서 버전 관리 (초안 vs 풀버전 vs 수정본, diff 뷰, 롤백)</span>
-- [ ] <span style="color:#c2410c">**Google API 연동**</span>
-  - <span style="color:#6b7280">Google Docs/Sheets 저장</span>
-  - <span style="color:#6b7280">Google Slides 생성</span>
-- [ ] <span style="color:#c2410c">**공유 기능**</span>
-  - <span style="color:#6b7280">기획서 공유 링크 생성 (읽기 전용)</span>
-  - <span style="color:#6b7280">PDF 내보내기</span>
-- [ ] <span style="color:#c2410c">**에이전트 실행 과정 실시간 스트리밍** — 각 에이전트가 무엇을 하고 있는지 사용자에게 표시</span>
-- [ ] <span style="color:#c2410c">**정부지원사업 양식 템플릿화**</span>
-  - <span style="color:#6b7280">예비창업패키지·초기창업패키지·창업성장기술개발·TIPS 등 주요 5개 양식</span>
-  - <span style="color:#6b7280">가장 간단한 것 먼저 진행</span>
-- [ ] <span style="color:#c2410c">**발표자료 자동 생성** — 사업기획서 14개 섹션 → 10~15슬라이드 자동 변환</span>
+- [ ] **대시보드**
+  - 내 기획서 목록 (생성일, 상태, 모델)
+  - 기획서 재열기·수정·재생성
+  - 기획서 버전 관리 (초안 vs 풀버전 vs 수정본, diff 뷰, 롤백)
+- [ ] **Google API 연동**
+  - Google Docs/Sheets 저장
+  - Google Slides 생성
+- [ ] **공유 기능**
+  - 기획서 공유 링크 생성 (읽기 전용)
+  - PDF 내보내기
+- [ ] **에이전트 실행 과정 실시간 스트리밍** — 각 에이전트가 무엇을 하고 있는지 사용자에게 표시
+- [ ] **정부지원사업 양식 템플릿화**
+  - 예비창업패키지·초기창업패키지·창업성장기술개발·TIPS 등 주요 5개 양식
+  - 가장 간단한 것 먼저 진행
+- [ ] **발표자료 자동 생성** — 사업기획서 14개 섹션 → 10~15슬라이드 자동 변환
 
 ### 기술 부채
 
-- [ ] <span style="color:#c2410c">**Next.js 16 middleware → proxy 마이그레이션** — `middleware.ts` deprecated 경고 발생 중 (동작에는 문제 없음). Next.js의 새 `proxy` convention으로 전환 필요</span>
-- [ ] <span style="color:#c2410c">**출력 잘림 대응 고도화** — LLM 응답이 토큰 한도에 걸려 잘릴 때 자동 continuation/retry 로직 강화 (현재는 잘림 경고만 표시)</span>
+- [ ] **Next.js 16 middleware → proxy 마이그레이션** — `middleware.ts` deprecated 경고 발생 중 (동작에는 문제 없음). Next.js의 새 `proxy` convention으로 전환 필요
+- [ ] **출력 잘림 대응 고도화** — LLM 응답이 토큰 한도에 걸려 잘릴 때 자동 continuation/retry 로직 강화 (현재는 잘림 경고만 표시)
 
 ### Phase 3: 클라우드 세팅
 
-- [ ] <span style="color:#c2410c">**배포 환경 구성**</span>
-  - <span style="color:#6b7280">Vercel 배포 또는 Docker + AWS/GCP</span>
-  - <span style="color:#6b7280">환경 분리: dev / staging / prod</span>
-  - <span style="color:#6b7280">CI/CD: GitHub Actions (lint → type-check → test → deploy)</span>
-- [ ] <span style="color:#c2410c">**보안 강화**</span>
-  - <span style="color:#6b7280">middleware.ts: 보안 헤더 (CSP, X-Frame-Options, HSTS)</span>
-  - <span style="color:#6b7280">API 입력 검증 (zod 스키마)</span>
-  - <span style="color:#6b7280">Rate Limiting (Redis 기반, 사용자·IP별)</span>
-  - <span style="color:#6b7280">API 키 환경변수 관리 (Vercel 환경변수 / AWS Secrets Manager)</span>
-- [ ] <span style="color:#c2410c">**모니터링**</span>
-  - <span style="color:#6b7280">에러 추적: Sentry</span>
-  - <span style="color:#6b7280">성능 모니터링: Vercel Analytics</span>
-  - <span style="color:#6b7280">서버 로깅: Pino 또는 Winston (구조화 로그)</span>
-- [ ] <span style="color:#c2410c">**CDN / 캐싱**</span>
-  - <span style="color:#6b7280">정적 자산 CDN</span>
-  - <span style="color:#6b7280">검색 결과 캐싱 (Redis, TTL 24h)</span>
+- [ ] **배포 환경 구성**
+  - Vercel 배포 또는 Docker + AWS/GCP
+  - 환경 분리: dev / staging / prod
+  - CI/CD: GitHub Actions (lint → type-check → test → deploy)
+- [ ] **보안 강화**
+  - middleware.ts: 보안 헤더 (CSP, X-Frame-Options, HSTS)
+  - API 입력 검증 (zod 스키마)
+  - Rate Limiting (Redis 기반, 사용자·IP별)
+  - API 키 환경변수 관리 (Vercel 환경변수 / AWS Secrets Manager)
+- [ ] **모니터링**
+  - 에러 추적: Sentry
+  - 성능 모니터링: Vercel Analytics
+  - 서버 로깅: Pino 또는 Winston (구조화 로그)
+- [ ] **CDN / 캐싱**
+  - 정적 자산 CDN
+  - 검색 결과 캐싱 (Redis, TTL 24h)
 
 ### Phase 4: 결제 모듈
 
-- [ ] <span style="color:#c2410c">**가격 모델 설계**</span>
-  - <span style="color:#6b7280">Free: 월 3건 초안 기획서</span>
-  - <span style="color:#6b7280">Pro (₩29,000/월): 무제한 초안 + 월 10건 풀버전 + PRD</span>
-  - <span style="color:#6b7280">Business (₩79,000/월): 무제한 전체 + 팀 공유 + Google 연동</span>
-  - <span style="color:#6b7280">(또는 건당 크레딧 방식)</span>
-- [ ] <span style="color:#c2410c">**결제 연동**</span>
-  - <span style="color:#6b7280">Stripe (글로벌) 또는 토스페이먼츠/포트원 (한국 특화)</span>
-  - <span style="color:#6b7280">구독 관리 (생성·갱신·취소·업그레이드)</span>
-  - <span style="color:#6b7280">사용량 추적 (월 생성 건수, 토큰 소비량)</span>
-- [ ] <span style="color:#c2410c">**과금 정책**</span>
-  - <span style="color:#6b7280">무료→유료 전환 트리거 (한도 초과 시 업그레이드 유도 UI)</span>
-  - <span style="color:#6b7280">영수증/인보이스 자동 발행</span>
-  - <span style="color:#6b7280">연간 결제 할인 (20%)</span>
-- [ ] <span style="color:#c2410c">**사용자 인증 (Phase C)** — 과금 연동 후</span>
-  - [ ] <span style="color:#1d4ed8">사용량 추적 (월별 생성 건수, 토큰 소비량)</span>
-  - [ ] <span style="color:#1d4ed8">무료 tier 한도 초과 시 로그인+업그레이드 유도 UI</span>
-  - [ ] <span style="color:#1d4ed8">구독 상태에 따른 기능 게이팅 (Free/Pro/Business)</span>
-  - [ ] <span style="color:#1d4ed8">결제 정보와 사용자 세션 연동 (Stripe customer ID ↔ user ID)</span>
+- [ ] **가격 모델 설계**
+  - Free: 월 3건 초안 기획서
+  - Pro (₩29,000/월): 무제한 초안 + 월 10건 풀버전 + PRD
+  - Business (₩79,000/월): 무제한 전체 + 팀 공유 + Google 연동
+  - (또는 건당 크레딧 방식)
+- [ ] **결제 연동**
+  - Stripe (글로벌) 또는 토스페이먼츠/포트원 (한국 특화)
+  - 구독 관리 (생성·갱신·취소·업그레이드)
+  - 사용량 추적 (월 생성 건수, 토큰 소비량)
+- [ ] **과금 정책**
+  - 무료→유료 전환 트리거 (한도 초과 시 업그레이드 유도 UI)
+  - 영수증/인보이스 자동 발행
+  - 연간 결제 할인 (20%)
+- [ ] **사용자 인증 (Phase C)** — 과금 연동 후
+  - [ ] 사용량 추적 (월별 생성 건수, 토큰 소비량)
+  - [ ] 무료 tier 한도 초과 시 로그인+업그레이드 유도 UI
+  - [ ] 구독 상태에 따른 기능 게이팅 (Free/Pro/Business)
+  - [ ] 결제 정보와 사용자 세션 연동 (Stripe customer ID ↔ user ID)
 
 ### Phase 5: GTM (Go-to-Market) 전략
 
-- [ ] <span style="color:#c2410c">**타겟 세그먼트 정의**</span>
-  - <span style="color:#6b7280">1차: 예비 창업자, 1인 기업가</span>
-  - <span style="color:#6b7280">2차: 스타트업 팀 (빠른 아이디어 검증)</span>
-  - <span style="color:#6b7280">3차: 액셀러레이터/창업지원기관</span>
-- [ ] <span style="color:#c2410c">**런칭 채널**</span>
-  - <span style="color:#6b7280">Product Hunt / 디스콰이엇</span>
-  - <span style="color:#6b7280">창업 관련 네이버 카페/블로그</span>
-  - <span style="color:#6b7280">LinkedIn 콘텐츠 마케팅</span>
-- [ ] <span style="color:#c2410c">**SEO / 콘텐츠**</span>
-  - <span style="color:#6b7280">OG 태그, 구조화 데이터, sitemap.xml</span>
-  - <span style="color:#6b7280">블로그: "AI로 사업기획서 쓰는 법" 등 콘텐츠 마케팅</span>
-  - <span style="color:#6b7280">샘플 기획서 공개 (리드 마그넷)</span>
-- [ ] <span style="color:#c2410c">**얼리 액세스**</span>
-  - <span style="color:#6b7280">대기 리스트 랜딩 페이지 (이메일 수집)</span>
-  - <span style="color:#6b7280">베타 50명 → 피드백 → 정식 출시</span>
-  - <span style="color:#6b7280">베타 사용자 평생 할인</span>
-- [ ] <span style="color:#c2410c">**분석 도구**</span>
-  - <span style="color:#6b7280">GA4 또는 Plausible</span>
-  - <span style="color:#6b7280">퍼널 분석: 랜딩→가입→첫 생성→유료 전환</span>
+- [ ] **타겟 세그먼트 정의**
+  - 1차: 예비 창업자, 1인 기업가
+  - 2차: 스타트업 팀 (빠른 아이디어 검증)
+  - 3차: 액셀러레이터/창업지원기관
+- [ ] **런칭 채널**
+  - Product Hunt / 디스콰이엇
+  - 창업 관련 네이버 카페/블로그
+  - LinkedIn 콘텐츠 마케팅
+- [ ] **SEO / 콘텐츠**
+  - OG 태그, 구조화 데이터, sitemap.xml
+  - 블로그: "AI로 사업기획서 쓰는 법" 등 콘텐츠 마케팅
+  - 샘플 기획서 공개 (리드 마그넷)
+- [ ] **얼리 액세스**
+  - 대기 리스트 랜딩 페이지 (이메일 수집)
+  - 베타 50명 → 피드백 → 정식 출시
+  - 베타 사용자 평생 할인
+- [ ] **분석 도구**
+  - GA4 또는 Plausible
+  - 퍼널 분석: 랜딩→가입→첫 생성→유료 전환
 
 ### Phase 6: CS / 운영 / 법적 준비
 
-- [ ] <span style="color:#c2410c">**이용약관 / 개인정보처리방침**</span>
-  - <span style="color:#6b7280">개인정보보호법 준수</span>
-  - <span style="color:#6b7280">AI 생성물 저작권/면책 조항</span>
-  - <span style="color:#6b7280">데이터 보관 및 삭제 정책</span>
-- [ ] <span style="color:#c2410c">**환불 정책**</span>
-  - <span style="color:#6b7280">구독: 결제일로부터 7일 이내 전액 환불</span>
-  - <span style="color:#6b7280">크레딧: 미사용분 환불 (사용분 차감)</span>
-  - <span style="color:#6b7280">자동 환불 프로세스 (Stripe webhook)</span>
-- [ ] <span style="color:#c2410c">**고객 지원**</span>
-  - <span style="color:#6b7280">헬프센터 / FAQ</span>
-  - <span style="color:#6b7280">이메일 CS (초기): support@도메인</span>
-  - <span style="color:#6b7280">인앱 채팅 (채널톡 또는 Crisp)</span>
-- [ ] <span style="color:#c2410c">**운영 대시보드**</span>
-  - <span style="color:#6b7280">관리자 페이지: 사용자 수, 일일 생성량, 매출, 에러율</span>
-  - <span style="color:#6b7280">API 비용 추적 (Claude/Gemini/OpenAI 비용 모니터링)</span>
-  - <span style="color:#6b7280">알림: 에러 급증, API 비용 이상치, 무료 티어 남용</span>
+- [ ] **이용약관 / 개인정보처리방침**
+  - 개인정보보호법 준수
+  - AI 생성물 저작권/면책 조항
+  - 데이터 보관 및 삭제 정책
+- [ ] **환불 정책**
+  - 구독: 결제일로부터 7일 이내 전액 환불
+  - 크레딧: 미사용분 환불 (사용분 차감)
+  - 자동 환불 프로세스 (Stripe webhook)
+- [ ] **고객 지원**
+  - 헬프센터 / FAQ
+  - 이메일 CS (초기): support@도메인
+  - 인앱 채팅 (채널톡 또는 Crisp)
+- [ ] **운영 대시보드**
+  - 관리자 페이지: 사용자 수, 일일 생성량, 매출, 에러율
+  - API 비용 추적 (Claude/Gemini/OpenAI 비용 모니터링)
+  - 알림: 에러 급증, API 비용 이상치, 무료 티어 남용
 
 ---
 
@@ -171,124 +171,124 @@
 
 ### Tier 1: 국내시장 / 핵심기능 — 기존 보유 기능 강화
 
-- [ ] <span style="color:#c2410c">**실시간 웹 데이터 수집 소스 확장** (기존 보유 → 고도화)</span>
-  - [x] <span style="color:#9ca3af">~~네이버 Search API 연동 (블로그·뉴스 5-way 병렬 수집, 한국 시장 동향 프롬프트 주입) ✅~~</span>
-  - [ ] <span style="color:#1d4ed8">DART(전자공시) 크롤링으로 국내 기업 재무 데이터 자동 수집</span>
-  - [ ] <span style="color:#1d4ed8">K-Startup·중소벤처기업부 공고 데이터 실시간 수집</span>
-  - [ ] <span style="color:#1d4ed8">크몽·탈잉 등 국내 프리랜서/서비스 플랫폼 가격 데이터 수집 (운영비 산출 근거)</span>
-  - [ ] <span style="color:#1d4ed8">한국 커뮤니티(디시인사이드, 블라인드, 에브리타임) 페인포인트 수집 추가</span>
-  - [ ] <span style="color:#1d4ed8">수집된 데이터에 '신뢰 등급(Trust Level)' 태깅 시스템 도입</span>
-- [ ] <span style="color:#c2410c">**멀티에이전트 팀 협업 구조 심화 + Devil's Advocate 한국형 튜닝** (기존 보유 → 고도화)</span>
-  - [ ] <span style="color:#1d4ed8">에이전트 간 교차 검증(Cross-Verification) — 시장분석 데이터를 재무 에이전트가 재검증</span>
-  - [x] <span style="color:#9ca3af">~~Devil's Advocate 스트레스 테스트 — '경쟁사 가격 30% 인하 시' 등 5개 시나리오 자동 실행 ✅~~</span>
-  - [x] <span style="color:#9ca3af">~~Devil's Advocate 한국형 튜닝 — 한국 규제 환경(인허가, 개인정보보호법, 전자상거래법 등) 리스크 자동 점검 ✅~~</span>
-  - [ ] <span style="color:#1d4ed8">Devil's Advocate 심사위원 모드 — 정부지원사업 심사위원 전형적 압박 질문 시뮬레이션</span>
-  - [ ] <span style="color:#1d4ed8">에이전트별 신뢰도 점수 시각화 — 각 섹션 데이터 뒷받침 수준 표시</span>
-  - [ ] <span style="color:#1d4ed8">에이전트 실행 과정 실시간 스트리밍 — 각 에이전트가 무엇을 하는지 표시</span>
-- [ ] <span style="color:#c2410c">**출처 강제 / 할루시네이션 억제 시스템 고도화** (기존 보유 → 고도화)</span>
-  - [ ] <span style="color:#1d4ed8">출처 불분명 시 '유사 산업 사례 기반 추정치' 논리 근거 함께 제시</span>
-  - [ ] <span style="color:#1d4ed8">Tavily 검색 결과를 벡터 DB 일시 저장 → LLM이 컨텍스트 내에서만 정보 추출 강제</span>
-  - [x] <span style="color:#9ca3af">~~출처 URL 자동 검증(dead link 체크) + 출처 신뢰도 등급 시각화 ✅~~</span>
-  - [ ] <span style="color:#1d4ed8">생성된 수치와 실제 출처 수치 간 불일치 자동 감지 알림</span>
+- [ ] **실시간 웹 데이터 수집 소스 확장** (기존 보유 → 고도화)
+  - [x] 네이버 Search API 연동 (블로그·뉴스 5-way 병렬 수집, 한국 시장 동향 프롬프트 주입) ✅
+  - [ ] DART(전자공시) 크롤링으로 국내 기업 재무 데이터 자동 수집
+  - [ ] K-Startup·중소벤처기업부 공고 데이터 실시간 수집
+  - [ ] 크몽·탈잉 등 국내 프리랜서/서비스 플랫폼 가격 데이터 수집 (운영비 산출 근거)
+  - [ ] 한국 커뮤니티(디시인사이드, 블라인드, 에브리타임) 페인포인트 수집 추가
+  - [ ] 수집된 데이터에 '신뢰 등급(Trust Level)' 태깅 시스템 도입
+- [ ] **멀티에이전트 팀 협업 구조 심화 + Devil's Advocate 한국형 튜닝** (기존 보유 → 고도화)
+  - [ ] 에이전트 간 교차 검증(Cross-Verification) — 시장분석 데이터를 재무 에이전트가 재검증
+  - [x] Devil's Advocate 스트레스 테스트 — '경쟁사 가격 30% 인하 시' 등 5개 시나리오 자동 실행 ✅
+  - [x] Devil's Advocate 한국형 튜닝 — 한국 규제 환경(인허가, 개인정보보호법, 전자상거래법 등) 리스크 자동 점검 ✅
+  - [ ] Devil's Advocate 심사위원 모드 — 정부지원사업 심사위원 전형적 압박 질문 시뮬레이션
+  - [ ] 에이전트별 신뢰도 점수 시각화 — 각 섹션 데이터 뒷받침 수준 표시
+  - [ ] 에이전트 실행 과정 실시간 스트리밍 — 각 에이전트가 무엇을 하는지 표시
+- [ ] **출처 강제 / 할루시네이션 억제 시스템 고도화** (기존 보유 → 고도화)
+  - [ ] 출처 불분명 시 '유사 산업 사례 기반 추정치' 논리 근거 함께 제시
+  - [ ] Tavily 검색 결과를 벡터 DB 일시 저장 → LLM이 컨텍스트 내에서만 정보 추출 강제
+  - [x] 출처 URL 자동 검증(dead link 체크) + 출처 신뢰도 등급 시각화 ✅
+  - [ ] 생성된 수치와 실제 출처 수치 간 불일치 자동 감지 알림
 
 ### Tier 2: 국내시장 / 핵심기능 — 신규 개발 필요
 
-- [ ] <span style="color:#c2410c">**정부지원사업 양식 네이티브 매핑** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">예비창업패키지·초기창업패키지·TIPS 등 주요 5개 양식 우선 템플릿화</span>
-  - [ ] <span style="color:#1d4ed8">My CSO 14개 섹션 → 정부양식 항목 자동 매핑 엔진 개발</span>
-  - [ ] <span style="color:#1d4ed8">HWP/DOCX 양식으로 직접 내보내기</span>
-  - [ ] <span style="color:#1d4ed8">심사위원 평가 기준 반영 피드백 기능</span>
-  - [ ] <span style="color:#1d4ed8">정부지원사업 공고 실시간 수집 + 사용자 조건 매칭 알림</span>
-- [ ] <span style="color:#c2410c">**한국형 시장 데이터 특화 분석** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">통계청 KOSIS, 한국은행 ECOS API 연동 — 국내 산업별 시장 규모·성장률 자동 수집</span>
-  - [ ] <span style="color:#1d4ed8">한국 VC 투자 트렌드 데이터(더벤처스, KVIC) 연동</span>
-  - [ ] <span style="color:#1d4ed8">네이버 쇼핑·카카오커머스 트렌드 데이터로 B2C 시장 검증</span>
-  - [ ] <span style="color:#1d4ed8">한국 스타트업 성공/실패 사례 DB 구축 — 유사 업종 벤치마크 제공</span>
-- [ ] <span style="color:#c2410c">**기존 문서 Import 후 최신 데이터 리프레시** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">업로드 문서 내 오래된 수치 자동 감지 → 최신 수치로 업데이트 제안</span>
-  - [ ] <span style="color:#1d4ed8">문서 내 논리적 공백(빈 섹션, 부실한 분석) 자동 진단 → 에이전트 자동 보완</span>
-  - [ ] <span style="color:#1d4ed8">HWP/한글 파일 파싱 지원</span>
-  - [ ] <span style="color:#1d4ed8">업로드 문서 vs AI 생성 결과 diff 뷰 제공</span>
-  - [ ] <span style="color:#1d4ed8">연도별 버전 관리 — 2025년 → 2026년 리프레시 이력 추적</span>
-- [ ] <span style="color:#c2410c">**프레젠테이션(발표자료) 자동 생성** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">사업기획서 14개 섹션 → 10~15슬라이드 발표자료 자동 변환</span>
-  - [ ] <span style="color:#1d4ed8">발표 스크립트 자동 생성 (슬라이드별 멘트)</span>
-  - [ ] <span style="color:#1d4ed8">정부지원사업 발표면접 예상 질문 + 모범답변 생성</span>
-  - [ ] <span style="color:#1d4ed8">PPTX/PDF 내보내기 + 한국식 디자인 템플릿</span>
+- [ ] **정부지원사업 양식 네이티브 매핑** (신규 개발)
+  - [ ] 예비창업패키지·초기창업패키지·TIPS 등 주요 5개 양식 우선 템플릿화
+  - [ ] My CSO 14개 섹션 → 정부양식 항목 자동 매핑 엔진 개발
+  - [ ] HWP/DOCX 양식으로 직접 내보내기
+  - [ ] 심사위원 평가 기준 반영 피드백 기능
+  - [ ] 정부지원사업 공고 실시간 수집 + 사용자 조건 매칭 알림
+- [ ] **한국형 시장 데이터 특화 분석** (신규 개발)
+  - [ ] 통계청 KOSIS, 한국은행 ECOS API 연동 — 국내 산업별 시장 규모·성장률 자동 수집
+  - [ ] 한국 VC 투자 트렌드 데이터(더벤처스, KVIC) 연동
+  - [ ] 네이버 쇼핑·카카오커머스 트렌드 데이터로 B2C 시장 검증
+  - [ ] 한국 스타트업 성공/실패 사례 DB 구축 — 유사 업종 벤치마크 제공
+- [ ] **기존 문서 Import 후 최신 데이터 리프레시** (신규 개발)
+  - [ ] 업로드 문서 내 오래된 수치 자동 감지 → 최신 수치로 업데이트 제안
+  - [ ] 문서 내 논리적 공백(빈 섹션, 부실한 분석) 자동 진단 → 에이전트 자동 보완
+  - [ ] HWP/한글 파일 파싱 지원
+  - [ ] 업로드 문서 vs AI 생성 결과 diff 뷰 제공
+  - [ ] 연도별 버전 관리 — 2025년 → 2026년 리프레시 이력 추적
+- [ ] **프레젠테이션(발표자료) 자동 생성** (신규 개발)
+  - [ ] 사업기획서 14개 섹션 → 10~15슬라이드 발표자료 자동 변환
+  - [ ] 발표 스크립트 자동 생성 (슬라이드별 멘트)
+  - [ ] 정부지원사업 발표면접 예상 질문 + 모범답변 생성
+  - [ ] PPTX/PDF 내보내기 + 한국식 디자인 템플릿
 
 ### Tier 3: 국내시장 / 부가기능
 
-- [ ] <span style="color:#c2410c">**반복 심화(Iterative Deepening) 루프** (신규 · 크레딧 과금 연계)</span>
-  - [ ] <span style="color:#1d4ed8">풀 리포트 생성 후 각 섹션에 '더 깊게 분석' 버튼 추가</span>
-  - [ ] <span style="color:#1d4ed8">해당 에이전트만 재실행하여 섹션별 심화 분석 생성</span>
-  - [ ] <span style="color:#1d4ed8">심화 분석 시 추가 크레딧 차감 모델 설계</span>
-  - [ ] <span style="color:#1d4ed8">심화 히스토리 관리 — 1차·2차·3차 분석 결과 비교 뷰</span>
-- [ ] <span style="color:#c2410c">**지원사업 공고 매칭 및 알림** (신규 · 실행 연결)</span>
-  - [ ] <span style="color:#1d4ed8">K-Startup·중소벤처기업부·창업진흥원 공고 실시간 크롤링</span>
-  - [ ] <span style="color:#1d4ed8">완성된 기획서의 업종·기술·규모 기반으로 적합 지원사업 자동 매칭</span>
-  - [ ] <span style="color:#1d4ed8">매칭된 지원사업 알림 (이메일·카카오톡·앱 푸시)</span>
-  - [ ] <span style="color:#1d4ed8">지원사업별 기획서 양식 차이점 자동 분석 → 기존 기획서 어댑팅 가이드</span>
-  - [ ] <span style="color:#1d4ed8">지원사업 마감일 캘린더 뷰 + 리마인더</span>
-- [ ] <span style="color:#c2410c">**AI Copilot 실시간 피드백** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">AI 컨설턴트 모드 — 섹션별 약점 피드백</span>
-  - [ ] <span style="color:#1d4ed8">투자자 시점 피드백 모드</span>
-  - [ ] <span style="color:#1d4ed8">정부사업 심사위원 시점 피드백 — 평가 항목별 점수화 + 개선 방향</span>
-- [ ] <span style="color:#c2410c">**실행 태스크 자동 변환 (Bridge to Execution)** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">Devil's Advocate의 MVP 추천 → To-Do 리스트 자동 변환</span>
-  - [ ] <span style="color:#1d4ed8">Notion API·Linear API 연동으로 태스크 직접 삽입</span>
-  - [ ] <span style="color:#1d4ed8">마일스톤 타임라인 자동 생성</span>
-  - [ ] <span style="color:#1d4ed8">전략 모니터링 알림 — 검색 쿼리 저장 → 새 위협/기회 발생 시 알림</span>
-- [ ] <span style="color:#c2410c">**멘토·액셀러레이터 협업 워크플로우** (신규 · B2B)</span>
-  - [ ] <span style="color:#1d4ed8">멘토 초대 → 코멘트·수정 이력 추적</span>
-  - [ ] <span style="color:#1d4ed8">액셀러레이터용 대시보드 — 보육기업 기획서 일괄 관리·비교</span>
-  - [ ] <span style="color:#1d4ed8">멘토 피드백 → AI가 반영 방안 자동 제안</span>
-  - [ ] <span style="color:#1d4ed8">버전 관리 — 수정 전후 diff 뷰 + 롤백</span>
-- [ ] <span style="color:#c2410c">**한국어 최적화 UX·온보딩** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">한국어 비즈니스 용어 사전 내장 (TAM/SAM/SOM, BEP 등 자동 설명)</span>
-  - [ ] <span style="color:#1d4ed8">한국 창업 단계별 가이드 온보딩 (예비창업 → 초기창업 → 성장)</span>
-  - [x] <span style="color:#9ca3af">~~카카오톡/네이버 간편 로그인 지원 ✅~~</span>
-  - [ ] <span style="color:#1d4ed8">모바일 최적화 — 한국은 모바일 퍼스트 시장</span>
-- [ ] <span style="color:#c2410c">**시장 변화 실시간 모니터링 알림** (신규 · 구독형)</span>
-  - [ ] <span style="color:#1d4ed8">기획서 작성 시 사용된 검색 쿼리 저장 → 정기적으로 재검색</span>
-  - [ ] <span style="color:#1d4ed8">경쟁사 Product Hunt 출시, 뉴스, 트렌드 변화 감지 시 알림</span>
-  - [ ] <span style="color:#1d4ed8">월간 전략 리프레시 리포트 자동 생성 (구독 과금 모델)</span>
-  - [ ] <span style="color:#1d4ed8">시장 변화에 따른 피벗 제안 자동 생성</span>
+- [ ] **반복 심화(Iterative Deepening) 루프** (신규 · 크레딧 과금 연계)
+  - [ ] 풀 리포트 생성 후 각 섹션에 '더 깊게 분석' 버튼 추가
+  - [ ] 해당 에이전트만 재실행하여 섹션별 심화 분석 생성
+  - [ ] 심화 분석 시 추가 크레딧 차감 모델 설계
+  - [ ] 심화 히스토리 관리 — 1차·2차·3차 분석 결과 비교 뷰
+- [ ] **지원사업 공고 매칭 및 알림** (신규 · 실행 연결)
+  - [ ] K-Startup·중소벤처기업부·창업진흥원 공고 실시간 크롤링
+  - [ ] 완성된 기획서의 업종·기술·규모 기반으로 적합 지원사업 자동 매칭
+  - [ ] 매칭된 지원사업 알림 (이메일·카카오톡·앱 푸시)
+  - [ ] 지원사업별 기획서 양식 차이점 자동 분석 → 기존 기획서 어댑팅 가이드
+  - [ ] 지원사업 마감일 캘린더 뷰 + 리마인더
+- [ ] **AI Copilot 실시간 피드백** (신규 개발)
+  - [ ] AI 컨설턴트 모드 — 섹션별 약점 피드백
+  - [ ] 투자자 시점 피드백 모드
+  - [ ] 정부사업 심사위원 시점 피드백 — 평가 항목별 점수화 + 개선 방향
+- [ ] **실행 태스크 자동 변환 (Bridge to Execution)** (신규 개발)
+  - [ ] Devil's Advocate의 MVP 추천 → To-Do 리스트 자동 변환
+  - [ ] Notion API·Linear API 연동으로 태스크 직접 삽입
+  - [ ] 마일스톤 타임라인 자동 생성
+  - [ ] 전략 모니터링 알림 — 검색 쿼리 저장 → 새 위협/기회 발생 시 알림
+- [ ] **멘토·액셀러레이터 협업 워크플로우** (신규 · B2B)
+  - [ ] 멘토 초대 → 코멘트·수정 이력 추적
+  - [ ] 액셀러레이터용 대시보드 — 보육기업 기획서 일괄 관리·비교
+  - [ ] 멘토 피드백 → AI가 반영 방안 자동 제안
+  - [ ] 버전 관리 — 수정 전후 diff 뷰 + 롤백
+- [ ] **한국어 최적화 UX·온보딩** (신규 개발)
+  - [ ] 한국어 비즈니스 용어 사전 내장 (TAM/SAM/SOM, BEP 등 자동 설명)
+  - [ ] 한국 창업 단계별 가이드 온보딩 (예비창업 → 초기창업 → 성장)
+  - [x] 카카오톡/네이버 간편 로그인 지원 ✅
+  - [ ] 모바일 최적화 — 한국은 모바일 퍼스트 시장
+- [ ] **시장 변화 실시간 모니터링 알림** (신규 · 구독형)
+  - [ ] 기획서 작성 시 사용된 검색 쿼리 저장 → 정기적으로 재검색
+  - [ ] 경쟁사 Product Hunt 출시, 뉴스, 트렌드 변화 감지 시 알림
+  - [ ] 월간 전략 리프레시 리포트 자동 생성 (구독 과금 모델)
+  - [ ] 시장 변화에 따른 피벗 제안 자동 생성
 
 ### Tier 4: 해외시장 / 핵심기능
 
-- [ ] <span style="color:#c2410c">**피치덱(Pitch Deck) 파이프라인 자동화** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">사업기획서 → 10~15슬라이드 피치덱 원클릭 변환</span>
-  - [ ] <span style="color:#1d4ed8">투자자 맞춤형 슬라이드 구성 (Problem → Solution → Market → Traction → Team → Ask)</span>
-  - [ ] <span style="color:#1d4ed8">PPTX/PDF 내보내기 + 프레젠테이션 모드</span>
-  - [ ] <span style="color:#1d4ed8">발표 스크립트 + 예상 Q&A 자동 생성</span>
-  - [ ] <span style="color:#1d4ed8">투자자별 맞춤 버전 관리 (VC/엔젤/은행별 강조점 차별화)</span>
-- [ ] <span style="color:#c2410c">**인터랙티브 동적 재무 모델링** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">매출 가정 슬라이더 → P&L/캐시플로우 실시간 변동 인터랙티브 UI</span>
-  - [ ] <span style="color:#1d4ed8">Best/Base/Worst 3가지 시나리오 자동 생성 + 비교 차트</span>
-  - [ ] <span style="color:#1d4ed8">DCF 기반 기업가치 평가 모듈</span>
-  - [ ] <span style="color:#1d4ed8">산업별 벤치마크 데이터 비교 기능</span>
-  - [ ] <span style="color:#1d4ed8">회계 소프트웨어(QuickBooks/Xero, 한국은 더존/세무사랑) 연동 로드맵</span>
-  - [ ] <span style="color:#1d4ed8">Red Flag Scoring — 기획서 재무 취약점 점수화 + 극복 KPI 제안</span>
-- [ ] <span style="color:#c2410c">**전략 프레임워크 자동 분석** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">SWOT 분석 자동 생성 (시장·경쟁 에이전트 데이터 기반)</span>
-  - [ ] <span style="color:#1d4ed8">PESTEL 분석 자동 생성 (타겟 국가별 규제·경제·기술 환경)</span>
-  - [ ] <span style="color:#1d4ed8">Porter's Five Forces 자동 분석</span>
-  - [ ] <span style="color:#1d4ed8">린 캔버스(Lean Canvas) / 비즈니스 모델 캔버스 자동 생성</span>
-  - [ ] <span style="color:#1d4ed8">Strategy Canvas 시각화 — 경쟁사 대비 포지셔닝 맵</span>
-- [ ] <span style="color:#c2410c">**다국어·글로벌 확장 인프라** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">영문 생성 모드 추가 (한국어 우선, 영어 옵션)</span>
-  - [ ] <span style="color:#1d4ed8">진출국 규제·인허가 자동 분석</span>
-  - [ ] <span style="color:#1d4ed8">Product Hunt 런치 전략 수립</span>
-  - [ ] <span style="color:#1d4ed8">영어권 투자자 표준 양식(YC Application, Sequoia 템플릿 등) 지원</span>
-  - [ ] <span style="color:#1d4ed8">통화·세금 체계 자동 전환 (USD/EUR/KRW 등)</span>
-- [ ] <span style="color:#c2410c">**팀 실시간 협업 & 버전 관리** (신규 개발)</span>
-  - [ ] <span style="color:#1d4ed8">실시간 공동 편집 (OT 또는 CRDT 기반)</span>
-  - [ ] <span style="color:#1d4ed8">섹션별 권한 관리 (편집/코멘트/뷰어)</span>
-  - [ ] <span style="color:#1d4ed8">변경 이력 추적 + 롤백 기능</span>
-  - [ ] <span style="color:#1d4ed8">투자자 전용 읽기 링크 (비밀번호 보호 + 열람 분석)</span>
-- [ ] <span style="color:#c2410c">**NDA·텀시트 등 법률 문서 템플릿** (신규 · 낮은 우선순위)</span>
-  - [ ] <span style="color:#1d4ed8">기본 NDA·Term Sheet 템플릿 제공 (법률 자문 면책 안내 포함)</span>
-  - [ ] <span style="color:#1d4ed8">투자 유치 체크리스트 자동 생성</span>
+- [ ] **피치덱(Pitch Deck) 파이프라인 자동화** (신규 개발)
+  - [ ] 사업기획서 → 10~15슬라이드 피치덱 원클릭 변환
+  - [ ] 투자자 맞춤형 슬라이드 구성 (Problem → Solution → Market → Traction → Team → Ask)
+  - [ ] PPTX/PDF 내보내기 + 프레젠테이션 모드
+  - [ ] 발표 스크립트 + 예상 Q&A 자동 생성
+  - [ ] 투자자별 맞춤 버전 관리 (VC/엔젤/은행별 강조점 차별화)
+- [ ] **인터랙티브 동적 재무 모델링** (신규 개발)
+  - [ ] 매출 가정 슬라이더 → P&L/캐시플로우 실시간 변동 인터랙티브 UI
+  - [ ] Best/Base/Worst 3가지 시나리오 자동 생성 + 비교 차트
+  - [ ] DCF 기반 기업가치 평가 모듈
+  - [ ] 산업별 벤치마크 데이터 비교 기능
+  - [ ] 회계 소프트웨어(QuickBooks/Xero, 한국은 더존/세무사랑) 연동 로드맵
+  - [ ] Red Flag Scoring — 기획서 재무 취약점 점수화 + 극복 KPI 제안
+- [ ] **전략 프레임워크 자동 분석** (신규 개발)
+  - [ ] SWOT 분석 자동 생성 (시장·경쟁 에이전트 데이터 기반)
+  - [ ] PESTEL 분석 자동 생성 (타겟 국가별 규제·경제·기술 환경)
+  - [ ] Porter's Five Forces 자동 분석
+  - [ ] 린 캔버스(Lean Canvas) / 비즈니스 모델 캔버스 자동 생성
+  - [ ] Strategy Canvas 시각화 — 경쟁사 대비 포지셔닝 맵
+- [ ] **다국어·글로벌 확장 인프라** (신규 개발)
+  - [ ] 영문 생성 모드 추가 (한국어 우선, 영어 옵션)
+  - [ ] 진출국 규제·인허가 자동 분석
+  - [ ] Product Hunt 런치 전략 수립
+  - [ ] 영어권 투자자 표준 양식(YC Application, Sequoia 템플릿 등) 지원
+  - [ ] 통화·세금 체계 자동 전환 (USD/EUR/KRW 등)
+- [ ] **팀 실시간 협업 & 버전 관리** (신규 개발)
+  - [ ] 실시간 공동 편집 (OT 또는 CRDT 기반)
+  - [ ] 섹션별 권한 관리 (편집/코멘트/뷰어)
+  - [ ] 변경 이력 추적 + 롤백 기능
+  - [ ] 투자자 전용 읽기 링크 (비밀번호 보호 + 열람 분석)
+- [ ] **NDA·텀시트 등 법률 문서 템플릿** (신규 · 낮은 우선순위)
+  - [ ] 기본 NDA·Term Sheet 템플릿 제공 (법률 자문 면책 안내 포함)
+  - [ ] 투자 유치 체크리스트 자동 생성
 
 ---
 
@@ -307,72 +307,72 @@
 ## 완료된 작업
 
 ### 아이디어 생성
-- [x] <span style="color:#9ca3af">~~키워드 입력 UI~~</span>
-- [x] <span style="color:#9ca3af">~~아이디어 3개 도출 (Ollama / Claude / Gemini / OpenAI)~~</span>
-- [x] <span style="color:#9ca3af">~~검색 엔진 Tavily 연동 (DuckDuckGo → Tavily)~~</span>
-- [x] <span style="color:#9ca3af">~~Reddit 커뮤니티 페인포인트 수집 (PullPush.io)~~</span>
-- [x] <span style="color:#9ca3af">~~Google Trends 급등 트렌드 수집~~</span>
-- [x] <span style="color:#9ca3af">~~Product Hunt 트렌딩 제품 수집~~</span>
-- [x] <span style="color:#9ca3af">~~4-way 병렬 수집 (Tavily + Reddit + Google Trends + Product Hunt)~~</span>
-- [x] <span style="color:#9ca3af">~~네이버 Search API 연동 → 5-way 병렬 수집 (블로그·뉴스 한국 시장 동향)~~</span>
-- [x] <span style="color:#9ca3af">~~키워드 플로우 사전 질문 (소프트웨어 여부 + 개발 규모) — 3경로 분기: SW+1인(기준 전체), SW+기존팀(기준2 제외), 비SW(criteria 미적용+소프트웨어 차단)~~</span>
+- [x] 키워드 입력 UI
+- [x] 아이디어 3개 도출 (Ollama / Claude / Gemini / OpenAI)
+- [x] 검색 엔진 Tavily 연동 (DuckDuckGo → Tavily)
+- [x] Reddit 커뮤니티 페인포인트 수집 (PullPush.io)
+- [x] Google Trends 급등 트렌드 수집
+- [x] Product Hunt 트렌딩 제품 수집
+- [x] 4-way 병렬 수집 (Tavily + Reddit + Google Trends + Product Hunt)
+- [x] 네이버 Search API 연동 → 5-way 병렬 수집 (블로그·뉴스 한국 시장 동향)
+- [x] 키워드 플로우 사전 질문 (소프트웨어 여부 + 개발 규모) — 3경로 분기: SW+1인(기준 전체), SW+기존팀(기준2 제외), 비SW(criteria 미적용+소프트웨어 차단)
 
 ### 기획서 Import
-- [x] <span style="color:#9ca3af">~~기존 기획서 Import 기능 — 탭 전환 UI, 파일 업로드/드래그앤드롭/텍스트 붙여넣기~~</span>
-- [x] <span style="color:#9ca3af">~~LLM Idea 추출 (`extract-idea` API) → view-plan 합류~~</span>
-- [x] <span style="color:#9ca3af">~~에이전트 팀 심화 모드 (기존 기획서를 컨텍스트로 보강)~~</span>
-- [x] <span style="color:#9ca3af">~~.docx Import 지원 (`/api/parse-docx`, mammoth)~~</span>
+- [x] 기존 기획서 Import 기능 — 탭 전환 UI, 파일 업로드/드래그앤드롭/텍스트 붙여넣기
+- [x] LLM Idea 추출 (`extract-idea` API) → view-plan 합류
+- [x] 에이전트 팀 심화 모드 (기존 기획서를 컨텍스트로 보강)
+- [x] .docx Import 지원 (`/api/parse-docx`, mammoth)
 
 ### 사업기획서 생성
-- [x] <span style="color:#9ca3af">~~단일 LLM 사업기획서 생성 (초안, 13개 섹션)~~</span>
-- [x] <span style="color:#9ca3af">~~**풀버전 에이전트 팀 구현** — 4개 전문 에이전트 순차 실행~~</span>
-  - <span style="color:#6b7280">Agent 1: 시장·트렌드·TAM (섹션 2, 3, 8)</span>
-  - <span style="color:#6b7280">Agent 2: 경쟁·차별화·플랫폼전략 (섹션 5, 6, 7)</span>
-  - <span style="color:#6b7280">Agent 3: 전략·솔루션·로드맵 (섹션 1, 4, 9, 10)</span>
-  - <span style="color:#6b7280">Agent 4: 재무·리스크·참고문헌 (섹션 11, 12, 13)</span>
-- [x] <span style="color:#9ca3af">~~섹션 순서대로 클라이언트 조합 (1→2→3→...→13→참고문헌)~~</span>
-- [x] <span style="color:#9ca3af">~~사업기획서 템플릿 서버 사이드 로딩 (docs/bizplan-template.md)~~</span>
-- [x] <span style="color:#9ca3af">~~아이디어 발굴 기준 서버 사이드 로딩 (assets/criteria.md)~~</span>
+- [x] 단일 LLM 사업기획서 생성 (초안, 13개 섹션)
+- [x] **풀버전 에이전트 팀 구현** — 4개 전문 에이전트 순차 실행
+  - Agent 1: 시장·트렌드·TAM (섹션 2, 3, 8)
+  - Agent 2: 경쟁·차별화·플랫폼전략 (섹션 5, 6, 7)
+  - Agent 3: 전략·솔루션·로드맵 (섹션 1, 4, 9, 10)
+  - Agent 4: 재무·리스크·참고문헌 (섹션 11, 12, 13)
+- [x] 섹션 순서대로 클라이언트 조합 (1→2→3→...→13→참고문헌)
+- [x] 사업기획서 템플릿 서버 사이드 로딩 (docs/bizplan-template.md)
+- [x] 아이디어 발굴 기준 서버 사이드 로딩 (assets/criteria.md)
 
 ### PRD 생성
-- [x] <span style="color:#9ca3af">~~PRD 자동 생성 (초안 또는 풀버전 참조 가능)~~</span>
-- [x] <span style="color:#9ca3af">~~PRD 마크다운/AI용 서식 토글~~</span>
-- [x] <span style="color:#9ca3af">~~클립보드 복사~~</span>
+- [x] PRD 자동 생성 (초안 또는 풀버전 참조 가능)
+- [x] PRD 마크다운/AI용 서식 토글
+- [x] 클립보드 복사
 
 ### 저장 기능
-- [x] <span style="color:#9ca3af">~~마크다운 저장 (.md)~~</span>
-- [x] <span style="color:#9ca3af">~~워드 저장 (.docx) — 헤딩/표/불릿 스타일 포함~~</span>
-- [x] <span style="color:#9ca3af">~~폴더 선택 저장 (File System Access API)~~</span>
-- [x] <span style="color:#9ca3af">~~파일명 규칙 통일: `사업기획서_(키워드)_(Draft/Full)_(서비스명)`, PRD는 `PRD_(키워드)_(서비스명)`, 키워드 없으면 `없음`~~</span>
-- [x] <span style="color:#9ca3af">~~`generated plans/` 폴더 git 추적 (여러 컴퓨터 간 공유용)~~</span>
+- [x] 마크다운 저장 (.md)
+- [x] 워드 저장 (.docx) — 헤딩/표/불릿 스타일 포함
+- [x] 폴더 선택 저장 (File System Access API)
+- [x] 파일명 규칙 통일: `사업기획서_(키워드)_(Draft/Full)_(서비스명)`, PRD는 `PRD_(키워드)_(서비스명)`, 키워드 없으면 `없음`
+- [x] `generated plans/` 폴더 git 추적 (여러 컴퓨터 간 공유용)
 
 ### AI 모델
-- [x] <span style="color:#9ca3af">~~Ollama (gemma2:9b) — 로컬~~</span>
-- [x] <span style="color:#9ca3af">~~Claude (claude-sonnet-4-6) — Anthropic~~</span>
-- [x] <span style="color:#9ca3af">~~Gemini (gemini-2.5-flash) — Google~~</span>
-- [x] <span style="color:#9ca3af">~~OpenAI (gpt-4o) — 연동 완료 (API 키 설정, 429 rate limit 자동 재시도 최대 4회)~~</span>
-- [x] <span style="color:#9ca3af">~~모델 선택 UI (provider별 모델 드롭다운)~~</span>
-- [x] <span style="color:#9ca3af">~~provider 사용 가능 여부 실시간 표시~~</span>
+- [x] Ollama (gemma2:9b) — 로컬
+- [x] Claude (claude-sonnet-4-6) — Anthropic
+- [x] Gemini (gemini-2.5-flash) — Google
+- [x] OpenAI (gpt-4o) — 연동 완료 (API 키 설정, 429 rate limit 자동 재시도 최대 4회)
+- [x] 모델 선택 UI (provider별 모델 드롭다운)
+- [x] provider 사용 가능 여부 실시간 표시
 
 ### UX
-- [x] <span style="color:#9ca3af">~~진행률 표시 (프로그레스 바 + 경과/예상 시간)~~</span>
-- [x] <span style="color:#9ca3af">~~단계별 완료 메시지 (체크 표시)~~</span>
-- [x] <span style="color:#9ca3af">~~"초안 보기" / "풀버전 보기" 화면 전환~~</span>
-- [x] <span style="color:#9ca3af">~~마크다운 렌더링 (ReactMarkdown + remarkGfm)~~</span>
-- [x] <span style="color:#9ca3af">~~아이디어 선택 → 사업기획서 복수 탭~~</span>
-- [x] <span style="color:#9ca3af">~~색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합~~</span>
-- [x] <span style="color:#9ca3af">~~랜딩 페이지 메시지 리포지셔닝 — "아이디어 발굴" → "기획서 작성" 중심으로 Hero·Steps·Features·CTA 카피 전면 변경~~</span>
+- [x] 진행률 표시 (프로그레스 바 + 경과/예상 시간)
+- [x] 단계별 완료 메시지 (체크 표시)
+- [x] "초안 보기" / "풀버전 보기" 화면 전환
+- [x] 마크다운 렌더링 (ReactMarkdown + remarkGfm)
+- [x] 아이디어 선택 → 사업기획서 복수 탭
+- [x] 색상 팔레트 중앙화 (`lib/colors.ts`) — CANYON/CANYON_DOCX 상수로 통합
+- [x] 랜딩 페이지 메시지 리포지셔닝 — "아이디어 발굴" → "기획서 작성" 중심으로 Hero·Steps·Features·CTA 카피 전면 변경
 
 ### 사업기획서 생성 (추가)
-- [x] <span style="color:#9ca3af">~~Agent 5: Devil's Advocate — 섹션 14(현실 검증 + MVP 추천 + 주의점) 생성~~</span>
-- [x] <span style="color:#9ca3af">~~에이전트 JD 단일 소스 (`docs/agents_jd.md`) — 런타임 프롬프트 주입~~</span>
-- [x] <span style="color:#9ca3af">~~가이드 질문 → 사업기획서 초안 경로 (`/start` → `/guided` 8단계 위자드)~~</span>
+- [x] Agent 5: Devil's Advocate — 섹션 14(현실 검증 + MVP 추천 + 주의점) 생성
+- [x] 에이전트 JD 단일 소스 (`docs/agents_jd.md`) — 런타임 프롬프트 주입
+- [x] 가이드 질문 → 사업기획서 초안 경로 (`/start` → `/guided` 8단계 위자드)
 
 ### 저장 기능 (추가)
-- [x] <span style="color:#9ca3af">~~네이티브 Save As 다이얼로그 (`showSaveFilePicker`) — 폴더+파일명 한번에 선택~~</span>
+- [x] 네이티브 Save As 다이얼로그 (`showSaveFilePicker`) — 폴더+파일명 한번에 선택
 
 ### 문서화
-- [x] <span style="color:#9ca3af">~~Mintlify Docs 스킬 적용 — frontmatter 표준화(summary+read_when+title), docs.json 정비, markdownlint 설정~~</span>
+- [x] Mintlify Docs 스킬 적용 — frontmatter 표준화(summary+read_when+title), docs.json 정비, markdownlint 설정
 
 ---
 
