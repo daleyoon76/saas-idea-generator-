@@ -104,10 +104,29 @@ export default function LoginPage() {
             Google로 계속하기
           </button>
 
-          {/* 추후 소셜 로그인 확장 영역 */}
-          <div className="mt-3 space-y-3">
-            {/* 네이버, 카카오 버튼 추후 추가 */}
-          </div>
+          {/* 네이버 로그인 */}
+          <button
+            onClick={() => signIn('naver', { callbackUrl: '/workflow' })}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition hover:shadow-md active:scale-[0.98] mt-3"
+            style={{ backgroundColor: '#03C75A', color: '#fff' }}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z" />
+            </svg>
+            네이버로 계속하기
+          </button>
+
+          {/* 카카오 로그인 */}
+          <button
+            onClick={() => signIn('kakao', { callbackUrl: '/workflow' })}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition hover:shadow-md active:scale-[0.98] mt-3"
+            style={{ backgroundColor: '#FEE500', color: '#000000D9' }}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3C6.477 3 2 6.463 2 10.691c0 2.72 1.8 5.108 4.516 6.467-.198.74-.716 2.68-.82 3.096-.128.516.19.509.398.37.164-.109 2.609-1.77 3.657-2.487.727.103 1.478.158 2.249.158 5.523 0 10-3.463 10-7.604C22 6.463 17.523 3 12 3" />
+            </svg>
+            카카오로 계속하기
+          </button>
 
           {/* 구분선 */}
           <div className="flex items-center gap-3 my-6">

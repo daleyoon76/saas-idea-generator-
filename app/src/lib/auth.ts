@@ -1,5 +1,7 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
+import Naver from 'next-auth/providers/naver';
+import Kakao from 'next-auth/providers/kakao';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -7,7 +9,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
-    // 추후: Naver, Kakao provider 여기에 추가
+    Naver({
+      clientId: process.env.NAVER_CLIENT_ID!,
+      clientSecret: process.env.NAVER_CLIENT_SECRET!,
+    }),
+    Kakao({
+      clientId: process.env.KAKAO_CLIENT_ID!,
+      clientSecret: process.env.KAKAO_CLIENT_SECRET!,
+    }),
   ],
   session: { strategy: 'jwt' },
   pages: {
