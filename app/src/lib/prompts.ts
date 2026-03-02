@@ -187,6 +187,7 @@ type FullPlanIdea = {
   rationale: string;
   category?: string;
   problem?: string;
+  vibeCoding?: string;
 };
 
 function buildSearchCtx(searchResults?: SearchResult[]): string {
@@ -205,6 +206,7 @@ ${existingPlanContent.slice(0, 6000)}
 }
 
 function ideaBlock(idea: FullPlanIdea): string {
+  const vibeLine = idea.vibeCoding ? `\n- AI 코딩 도구 활용: ${idea.vibeCoding}` : '';
   return `## 서비스 정보
 - 서비스명: ${idea.name}
 - 설명: ${idea.oneLiner}
@@ -212,7 +214,7 @@ function ideaBlock(idea: FullPlanIdea): string {
 - 해결하려는 문제: ${idea.problem || idea.rationale}
 - 핵심 기능: ${idea.features.join(', ')}
 - 차별화: ${idea.differentiation}
-- 수익 모델: ${idea.revenueModel}`;
+- 수익 모델: ${idea.revenueModel}${vibeLine}`;
 }
 
 /** Agent 1 — 시장·문제 에이전트: 섹션 2, 3, 8 */
@@ -350,6 +352,7 @@ export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: 
 
 - 향후 개발을 어떤 단계로 진행해 출시할지
 - Phase 1 / Phase 2 / Phase 3 구분, 마일스톤별 목표·산출물·대략적 시기
+- 서비스 정보에 "AI 코딩 도구 활용" 항목이 있으면 개발 기간 산정 시 반영하세요.
 
 ---
 
@@ -357,6 +360,7 @@ export function createFullPlanStrategyPrompt(idea: FullPlanIdea, marketContent: 
 
 - 단계별 태스크, 담당, 기간, 의존 관계
 - Markdown 표로 작성 (가능한 경우)
+- 서비스 정보에 "AI 코딩 도구 활용: 적극 활용"이 있으면 개발 태스크 기간을 30~50% 단축하세요.
 
 ---
 
@@ -411,6 +415,10 @@ export function createFullPlanFinancePrompt(idea: FullPlanIdea, marketContent: s
 
 - **인력**: 역할·인원·투입 기간
 - **비용**: 직접비(인건비, 외주, 인프라), 간접비(관리, 마케팅)
+- **AI 코딩 도구 반영**: 서비스 정보의 "AI 코딩 도구 활용" 항목을 확인하여 개발 MM·기간·인건비를 조정하세요.
+  · "적극 활용" → 개발 인력 MM을 기본 대비 50~70%로 축소, 개발 기간도 단축
+  · "부분 활용" → 개발 인력 MM을 기본 대비 70~85%로 축소
+  · "미사용" 또는 미기재 → 전통 개발 방식 기준 (조정 없음)
 
 ### 12.2 매출 전망 [번호]
 
@@ -564,6 +572,7 @@ export function createBusinessPlanPrompt(idea: {
   rationale: string;
   category?: string;
   problem?: string;
+  vibeCoding?: string;
 }, searchResults?: SearchResult[], template?: string): string {
   let searchContext = '';
   if (searchResults && searchResults.length > 0) {
@@ -607,7 +616,7 @@ ${searchContext}
 - 해결하려는 문제: ${idea.problem || idea.rationale}
 - 핵심 기능: ${idea.features.join(', ')}
 - 차별화 포인트: ${idea.differentiation}
-- 수익 모델: ${idea.revenueModel}
+- 수익 모델: ${idea.revenueModel}${idea.vibeCoding ? `\n- AI 코딩 도구 활용: ${idea.vibeCoding}` : ''}
 
 **작성 원칙:**
 - 모든 수치·통계는 검색 자료 [번호] 형식으로 반드시 출처를 표기하세요.

@@ -17,6 +17,11 @@ const C = CANYON;
 // ── 상수 ────────────────────────────────────────────────────
 const CATEGORY_OPTIONS = ['웹 SaaS', '모바일 앱', '플랫폼·마켓플레이스', 'API·개발자 도구', 'AI 에이전트', '기타'];
 const REVENUE_OPTIONS = ['월 구독 (SaaS)', '거래 수수료', '프리미엄', '광고', 'API 과금', '라이선스', '기타'];
+const VIBE_CODING_OPTIONS = [
+  { value: '적극 활용', label: '적극 활용', desc: 'AI 코딩 도구(Cursor, Claude Code 등)를 주 개발 도구로 사용' },
+  { value: '부분 활용', label: '부분 활용', desc: '코드 보조·리뷰 용도로 일부 활용' },
+  { value: '미사용', label: '미사용 / 해당 없음', desc: '전통적인 개발 방식 또는 비기술 창업자' },
+];
 const DIFFICULTY_OPTIONS = [
   { value: '쉬움', label: '쉬움 (하)', desc: '기존 API·프레임워크 조합으로 빠르게 MVP 가능' },
   { value: '보통', label: '보통 (중)', desc: '커스텀 로직이나 외부 연동이 일부 필요' },
@@ -202,6 +207,7 @@ export default function GuidedPage() {
       revenueModel: a.revenueModel,
       mvpDifficulty: a.mvpDifficulty,
       rationale: `사용자 직접 입력: ${a.problem}`,
+      vibeCoding: a.vibeCoding,
     };
   }
 
@@ -273,7 +279,7 @@ export default function GuidedPage() {
       router.push('/workflow?from=guided');
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
-      setGuidedStep(8); // 마지막 질문으로 돌아감
+      setGuidedStep(9); // 마지막 질문으로 돌아감
     } finally {
       setLoadingMessage('');
       stopTimer();
@@ -422,15 +428,16 @@ export default function GuidedPage() {
       case 5: return (answers.features || []).filter(f => f.trim()).length >= 2;
       case 6: return !!(answers.differentiation?.trim());
       case 7: return !!answers.revenueModel;
-      case 8: return !!answers.mvpDifficulty;
+      case 8: return !!answers.vibeCoding;
+      case 9: return !!answers.mvpDifficulty;
       default: return false;
     }
   }
 
   function goNext() {
-    if (typeof guidedStep === 'number' && guidedStep < 8) {
+    if (typeof guidedStep === 'number' && guidedStep < 9) {
       setGuidedStep((guidedStep + 1) as GuidedStep);
-    } else if (guidedStep === 8) {
+    } else if (guidedStep === 9) {
       generatePlan();
     }
   }
@@ -675,7 +682,7 @@ export default function GuidedPage() {
             </div>
           )}
 
-          {/* ── 질문 스텝 (1~8) ───────────────────────────── */}
+          {/* ── 질문 스텝 (1~9) ───────────────────────────── */}
           {typeof guidedStep === 'number' && pageMode === 'wizard' && (
             <>
               {/* DEV: 예시 답변 자동 입력 + 즉시 생성 */}
@@ -695,6 +702,7 @@ export default function GuidedPage() {
                       ],
                       differentiation: 'ChatGPT 대화형은 단일 LLM이 모든 섹션을 한 번에 쓰기때문에 깊이가 얕다. My CSO는 역할별 에이전트 4명이 이전 에이전트의 결과를 컨텍스트로 받아 순차 작성하므로 시장 데이터 기반의 일관성 있는 기획서가 나온다. 또한 실시간 웹 검색 결과를 프롬프트에 주입해 할루시네이션을 줄인다.',
                       revenueModel: '월 구독 (SaaS)',
+                      vibeCoding: '적극 활용',
                       mvpDifficulty: '보통',
                     };
                     setAnswers(testAnswers);
@@ -722,6 +730,7 @@ export default function GuidedPage() {
                       ],
                       differentiation: '기존의 대학입시 관련 컨설팅은 일회성 그리고 오프라인 컨설팅이 대부분이다. 그리고 그 결과를 기반으로 학부모, 학생이 스스로 찾고, 정보를 취득해서 컨설팅 결과에 맞춰가는데 많은 시간과 노력, 스스로의 관리가 필요하다보니, 의도한바 대로 컨설팅 결과에 100% 적합하게 진행하는데 한계점이 뚜렷히 보인다. 이에, 대학입시 전략 서비스를 통해 입시 컨설팅, 컨설팅 결과 수행 도우미, 컨설팅 결과 유무를 통한 합격률 예측, 그리고 진로/진학 변경으로 기존 목표로 한 대학교(학과)에서 최소한의 입시 전략 수정으로 합격률 변화 최소화 등의 서비스의 차별성을 만들 수 있습니다.',
                       revenueModel: '월 구독 (SaaS)',
+                      vibeCoding: '미사용',
                       mvpDifficulty: '어려움',
                     };
                     setAnswers(testAnswers2);
@@ -738,16 +747,16 @@ export default function GuidedPage() {
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium" style={{ color: C.textMid }}>
-                    질문 {guidedStep} / 8
+                    질문 {guidedStep} / 9
                   </span>
                   <span className="text-xs" style={{ color: C.textLight }}>
-                    {Math.round((guidedStep / 8) * 100)}%
+                    {Math.round((guidedStep / 9) * 100)}%
                   </span>
                 </div>
                 <div className="w-full rounded-full h-1.5" style={{ backgroundColor: C.border }}>
                   <div
                     className="h-1.5 rounded-full transition-all duration-300"
-                    style={{ width: `${(guidedStep / 8) * 100}%`, backgroundColor: C.accent }}
+                    style={{ width: `${(guidedStep / 9) * 100}%`, backgroundColor: C.accent }}
                   />
                 </div>
               </div>
@@ -955,8 +964,36 @@ export default function GuidedPage() {
                   </div>
                 )}
 
-                {/* Step 8: MVP 난이도 */}
+                {/* Step 8: 바이브 코딩 활용도 */}
                 {guidedStep === 8 && (
+                  <div>
+                    <h2 className="text-xl font-bold mb-2" style={{ color: C.textDark }}>
+                      AI 코딩 도구를 활용하실 계획인가요?
+                    </h2>
+                    <p className="text-sm mb-6" style={{ color: C.textMid }}>
+                      Cursor, Claude Code 등 AI 코딩 도구 활용 수준에 따라 개발 리소스 산정이 달라집니다.
+                    </p>
+                    <div className="space-y-3">
+                      {VIBE_CODING_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setAnswers(prev => ({ ...prev, vibeCoding: opt.value }))}
+                          className="w-full text-left p-4 rounded-xl transition"
+                          style={answers.vibeCoding === opt.value
+                            ? { backgroundColor: C.selectedBg, border: `2px solid ${C.accent}` }
+                            : { backgroundColor: '#fff', border: `2px solid ${C.border}` }
+                          }
+                        >
+                          <div className="font-semibold text-sm" style={{ color: C.textDark }}>{opt.label}</div>
+                          <div className="text-xs mt-0.5" style={{ color: C.textMid }}>{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 9: MVP 난이도 */}
+                {guidedStep === 9 && (
                   <div>
                     <h2 className="text-xl font-bold mb-2" style={{ color: C.textDark }}>
                       MVP 개발 난이도는 어떻게 예상하시나요?
@@ -1016,7 +1053,7 @@ export default function GuidedPage() {
                   className="px-6 py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ backgroundColor: C.accent, color: '#fff' }}
                 >
-                  {guidedStep === 8 ? '사업기획서 생성 →' : '다음 →'}
+                  {guidedStep === 9 ? '사업기획서 생성 →' : '다음 →'}
                 </button>
               </div>
             </>

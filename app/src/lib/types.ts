@@ -10,6 +10,7 @@ export interface Idea {
   revenueModel: string;
   mvpDifficulty: string;
   rationale: string;
+  vibeCoding?: string;
 }
 
 export interface BusinessPlan {
@@ -127,10 +128,11 @@ export interface GuidedAnswers {
   features: string[];
   differentiation: string;
   revenueModel: string;
+  vibeCoding: string;
   mvpDifficulty: string;
 }
 
-export type GuidedStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 'generating' | 'complete';
+export type GuidedStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 'generating' | 'complete';
 
 export interface GuidedResult {
   idea: Idea;

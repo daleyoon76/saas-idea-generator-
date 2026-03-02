@@ -1,3 +1,12 @@
+---
+summary: "4개 에이전트(시장조사·경쟁분석·재무모델·악마의 변호사)의 역할 정의 — 런타임에 LLM 프롬프트로 주입되는 단일 소스"
+read_when:
+  - You want to understand or modify agent roles in the business plan pipeline
+  - You need to edit agent prompt instructions injected at runtime via AGENT tags
+  - You are adding a new agent to the generation pipeline
+title: "에이전트 직무 기술서"
+---
+
 # 에이전트 직무 기술서 (Agents Job Description)
 
 > 각 에이전트가 전체 파이프라인에서 맡은 역할과 미션을 정의한다.
@@ -264,6 +273,7 @@ Section 14 → 문서 끝에 추가 → 최종 문서
 
 - 향후 개발을 어떤 단계로 진행해 출시할지
 - Phase 1 / Phase 2 / Phase 3 구분, 마일스톤별 목표·산출물·대략적 시기
+- 서비스 정보에 "AI 코딩 도구 활용" 항목이 있으면 개발 기간 산정 시 반영하세요.
 
 ---
 
@@ -271,6 +281,7 @@ Section 14 → 문서 끝에 추가 → 최종 문서
 
 - 단계별 태스크, 담당, 기간, 의존 관계
 - Markdown 표로 작성 (가능한 경우)
+- 서비스 정보에 "AI 코딩 도구 활용: 적극 활용"이 있으면 개발 태스크 기간을 30~50% 단축하세요.
 
 ---
 
@@ -323,6 +334,10 @@ Section 14 → 문서 끝에 추가 → 최종 문서
 
 - **인력**: 역할·인원·투입 기간
 - **비용**: 직접비(인건비, 외주, 인프라), 간접비(관리, 마케팅)
+- **AI 코딩 도구 반영**: 서비스 정보의 "AI 코딩 도구 활용" 항목을 확인하여 개발 MM·기간·인건비를 조정하세요.
+  · "적극 활용" → 개발 인력 MM을 기본 대비 50~70%로 축소, 개발 기간도 단축
+  · "부분 활용" → 개발 인력 MM을 기본 대비 70~85%로 축소
+  · "미사용" 또는 미기재 → 전통 개발 방식 기준 (조정 없음)
 
 ### 12.2 매출 전망 [번호]
 
