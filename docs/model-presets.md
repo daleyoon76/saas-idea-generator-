@@ -1,3 +1,12 @@
+---
+summary: "프리셋(기본/고품질)별 모듈별 AI 모델 1·2·3순위 배정표와 폴백 체인"
+read_when:
+  - You want to know which AI model is used for each module and preset
+  - You need to change or add model assignments in MODULE_PRESETS
+  - You are debugging model fallback behavior or provider errors
+title: "모델 프리셋 배정표"
+---
+
 # AI 모델 프리셋 배정표
 
 > **자동 생성 기준**: `app/src/lib/types.ts` → `MODULE_PRESETS`

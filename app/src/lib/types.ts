@@ -80,6 +80,9 @@ export interface HistoryResponse {
   totalPages: number;
 }
 
+export type BusinessType = 'software' | 'non-software';
+export type DevScale = 'solo-startup' | 'existing-team';
+
 export type WorkflowStep =
   | 'keyword'
   | 'generating-ideas'

@@ -40,7 +40,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun, AlignmentType, ExternalHyperlink } from 'docx';
-import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, QualityPreset, MODULE_PRESETS, PRESET_INFO, GuidedResult, GUIDED_RESULT_KEY } from '@/lib/types';
+import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, QualityPreset, MODULE_PRESETS, PRESET_INFO, GuidedResult, GUIDED_RESULT_KEY, BusinessType, DevScale } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
 import { parseChartJson } from '@/lib/chart-schema';
@@ -316,6 +316,8 @@ function WorkflowPageInner() {
   // DB 아이디어 ID 매핑 (localId → dbId)
   const [dbIdeaMap, setDbIdeaMap] = useState<Record<number, string>>({});
   const [keyword, setKeyword] = useState('');
+  const [businessType, setBusinessType] = useState<BusinessType>('software');
+  const [devScale, setDevScale] = useState<DevScale>('solo-startup');
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [selectedIdeas, setSelectedIdeas] = useState<number[]>([]);
   const [businessPlans, setBusinessPlans] = useState<BusinessPlan[]>([]);
@@ -670,6 +672,8 @@ function WorkflowPageInner() {
           trendsResults: trendsData,
           productHuntResults: productHuntData,
           naverResults: naverData,
+          businessType,
+          devScale: businessType === 'software' ? devScale : undefined,
         }),
       });
 
@@ -2442,6 +2446,54 @@ function WorkflowPageInner() {
               onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
               onBlur={e => (e.currentTarget.style.borderColor = C.border)}
             />
+
+            {/* 사전 질문: 소프트웨어 여부 + 개발 규모 */}
+            <div className="mt-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: C.textDark }}>
+                  소프트웨어(SaaS/앱) 서비스인가요?
+                </h3>
+                <div className="flex gap-2">
+                  {([['software', '예, 소프트웨어'], ['non-software', '아니오, 비소프트웨어']] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setBusinessType(val)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                      style={businessType === val
+                        ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg, color: C.accent }
+                        : { border: `2px solid ${C.border}`, backgroundColor: '#fff', color: C.textMid }
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {businessType === 'software' && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2" style={{ color: C.textDark }}>
+                    개발 규모는 어떻게 되나요?
+                  </h3>
+                  <div className="flex gap-2">
+                    {([['solo-startup', '1인 / 스타트업'], ['existing-team', '기존 개발팀 보유']] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setDevScale(val)}
+                        className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                        style={devScale === val
+                          ? { border: `2px solid ${C.accent}`, backgroundColor: C.selectedBg, color: C.accent }
+                          : { border: `2px solid ${C.border}`, backgroundColor: '#fff', color: C.textMid }
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="mt-6 flex justify-end">
               <button
                 onClick={generateIdeas}

@@ -1,3 +1,11 @@
+---
+summary: "사업기획서 섹션별 구조 참조용 템플릿 (Trend, Service Model, BM, GTM 등)"
+read_when:
+  - You want to understand the business plan template section structure
+  - You need to modify or compare the template used for plan generation
+title: "사업기획서 템플릿 (Asset)"
+---
+
 # 사업기획안 템플릿
 
 ## 1. Trend (트렌드)

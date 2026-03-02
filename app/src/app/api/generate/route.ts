@@ -102,16 +102,36 @@ function buildFullPlanDevilPrompt(idea: Idea, fullPlanContent: string, searchRes
   return createFullPlanDevilPrompt(idea, fullPlanContent, searchResults, existingPlanContent, instructions['full-plan-devil']);
 }
 
+// criteria.md에서 기준 2(마이크로 니치 버티컬) 섹션 및 체크리스트 2번 제거
+function removeCriteria2(criteria: string): string {
+  // ### 기준 2: ~ ### 기준 3: 앞까지 제거
+  let result = criteria.replace(/### 기준 2:[\s\S]*?(?=### 기준 3:)/, '');
+  // 체크리스트 2번 항목 제거
+  result = result.replace(/\n\d+\.\s*빅테크가 쉽게 침범하기 어려운 마이크로 니치 버티컬인가\?/, '');
+  return result;
+}
+
 // app/src/assets/criteria.md 를 서버에서 읽어 아이디어 생성 프롬프트 생성
-function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: SearchResult[], redditResults: SearchResult[] = [], trendsResults: SearchResult[] = [], productHuntResults: SearchResult[] = [], naverResults: SearchResult[] = []): string {
+function buildIdeaGenerationPrompt(keyword: string | undefined, searchResults: SearchResult[], redditResults: SearchResult[] = [], trendsResults: SearchResult[] = [], productHuntResults: SearchResult[] = [], naverResults: SearchResult[] = [], businessType?: string, devScale?: string): string {
   let criteria: string | undefined;
-  try {
-    const criteriaPath = path.join(process.cwd(), 'src', 'assets', 'criteria.md');
-    criteria = fs.readFileSync(criteriaPath, 'utf-8');
-  } catch {
-    console.warn('criteria.md 읽기 실패, 기본 기준으로 폴백');
+
+  if (businessType === 'non-software') {
+    // 비소프트웨어: criteria 미적용
+    criteria = undefined;
+  } else {
+    try {
+      const criteriaPath = path.join(process.cwd(), 'src', 'assets', 'criteria.md');
+      criteria = stripFrontmatter(fs.readFileSync(criteriaPath, 'utf-8'));
+    } catch {
+      console.warn('criteria.md 읽기 실패, 기본 기준으로 폴백');
+    }
+    // 소프트웨어 + 기존 개발팀: 기준 2 제거
+    if (criteria && devScale === 'existing-team') {
+      criteria = removeCriteria2(criteria);
+    }
   }
-  return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults, naverResults);
+
+  return createIdeaGenerationPrompt(keyword, searchResults, criteria, redditResults, trendsResults, productHuntResults, naverResults, businessType);
 }
 
 // --- 동적 검색 쿼리 생성 프롬프트 ---
@@ -262,8 +282,8 @@ export async function POST(request: NextRequest) {
     // PRD 요청: 서버에서 prd-template.md 읽어 프롬프트 생성
     let prompt: string;
     if (type === 'generate-ideas') {
-      const { keyword, searchResults: sr, redditResults: rr, trendsResults: tr, productHuntResults: ph, naverResults: nv } = body;
-      prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || [], (rr as SearchResult[]) || [], (tr as SearchResult[]) || [], (ph as SearchResult[]) || [], (nv as SearchResult[]) || []);
+      const { keyword, searchResults: sr, redditResults: rr, trendsResults: tr, productHuntResults: ph, naverResults: nv, businessType: bt, devScale: ds } = body;
+      prompt = buildIdeaGenerationPrompt(keyword, (sr as SearchResult[]) || [], (rr as SearchResult[]) || [], (tr as SearchResult[]) || [], (ph as SearchResult[]) || [], (nv as SearchResult[]) || [], bt as string | undefined, ds as string | undefined);
     } else if (type === 'business-plan' && idea) {
       prompt = buildBusinessPlanPrompt(idea as Idea, (searchResults as SearchResult[]) || []);
     } else if (type === 'generate-prd' && idea) {

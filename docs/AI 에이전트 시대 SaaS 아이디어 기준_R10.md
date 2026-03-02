@@ -1,3 +1,12 @@
+---
+summary: "바이브 코딩 기반 에이전틱 SaaS 아이템 발굴 5대 기준의 원본 심층 연구 보고서 (R10)"
+read_when:
+  - You want to understand the theoretical basis behind the SaaS idea evaluation criteria
+  - You need the full research context on agentic SaaS market trends and vibe coding
+  - You are updating or extending the criteria used in idea generation
+title: "SaaS 아이디어 기준 연구보고서"
+---
+
 # **2026년 바이브 코딩 기반 에이전틱 SaaS 초기 아이템 발굴 및 프롬프트 최적화 심층 연구 보고서**
 
 ## **1\. 서론: 소프트웨어 개발 및 소비 패러다임의 근본적 전환**

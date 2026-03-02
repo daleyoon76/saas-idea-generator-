@@ -1,3 +1,12 @@
+---
+summary: "아이디어 생성 프롬프트에 자동 주입되는 2026년 에이전틱 SaaS 5대 발굴 기준 원본"
+read_when:
+  - You want to understand the criteria injected into idea generation prompts
+  - You need to update the SaaS evaluation criteria used at runtime
+  - You are reviewing how AI agents score and filter ideas
+title: "아이디어 발굴 기준 (Asset)"
+---
+
 # 2026년 에이전틱 SaaS 초기 아이템 발굴 기준
 
 > 출처: AI 에이전트 시대 SaaS 아이디어 기준_R10.md

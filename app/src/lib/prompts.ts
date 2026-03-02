@@ -8,7 +8,7 @@ export interface SearchResult {
   snippet: string;
 }
 
-export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[], productHuntResults?: SearchResult[], naverResults?: SearchResult[]): string {
+export function createIdeaGenerationPrompt(keyword?: string, searchResults?: SearchResult[], criteria?: string, redditResults?: SearchResult[], trendsResults?: SearchResult[], productHuntResults?: SearchResult[], naverResults?: SearchResult[], businessType?: string): string {
   const keywordPart = keyword ? `"${keyword}" 관련` : '';
 
   let searchContext = '';
@@ -77,9 +77,30 @@ ${naverResults.map((r, i) => `${i + 1}. **${r.title}** (${r.url})
 `;
   }
 
-  const criteriaSection = criteria
-    ? `## 아이디어 발굴 기준\n${criteria}`
-    : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
+  const isNonSoftware = businessType === 'non-software';
+
+  const criteriaSection = isNonSoftware
+    ? '' // 비소프트웨어: criteria 미적용
+    : criteria
+      ? `## 아이디어 발굴 기준\n${criteria}`
+      : `## 아이디어 발굴 기준\n- 명확한 문제 해결, 충분한 시장 규모, MVP 빠른 구현 가능 여부를 기준으로 선정`;
+
+  const ideaTypeLabel = isNonSoftware ? '사업 아이디어' : 'SaaS/Agent 아이디어';
+
+  const criteriaGuideLine = isNonSoftware
+    ? ''
+    : '\n각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.';
+
+  const nonSoftwareGuard = isNonSoftware
+    ? `\n🚫 비소프트웨어 사업 모드:
+- SaaS, 앱, 소프트웨어 플랫폼, AI 에이전트 등 소프트웨어 기반 아이디어를 절대 제안하지 마세요.
+- 오프라인 서비스, 제조, 유통, 프랜차이즈, 컨설팅, 교육, 의료, F&B 등 비소프트웨어 사업 아이디어만 제안하세요.
+- 디지털 도구는 운영 보조 수단으로만 언급하고, 소프트웨어 자체가 핵심 제품인 아이디어는 제외하세요.\n`
+    : '';
+
+  const contextIntro = isNonSoftware
+    ? `시장 환경을 참고하여, ${keywordPart} ${ideaTypeLabel} 3개를 아래 JSON 형식으로 출력하세요.`
+    : `위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} ${ideaTypeLabel} 3개를 아래 JSON 형식으로 출력하세요.`;
 
   return `한국어로만 답변하세요.
 
@@ -88,11 +109,10 @@ ${naverResults.map((r, i) => `${i + 1}. **${r.title}** (${r.url})
 - 가상의 회사명, 수치, 사례를 만들어내지 마세요.
 - 검색 자료가 없거나 근거가 없으면 해당 필드를 "시장 조사 필요"로 표기하세요.
 - rationale 필드는 검색 자료 [번호]를 인용하여 근거를 제시하세요.
-
+${nonSoftwareGuard}
 ${criteriaSection}
 ${searchContext}${redditContext}${trendsContext}${productHuntContext}${naverContext}
-위 발굴 기준과 시장 환경을 참고하여, ${keywordPart} SaaS/Agent 아이디어 3개를 아래 JSON 형식으로 출력하세요.
-각 아이디어는 발굴 기준의 5가지 기준(수요 형태 변화, 버티컬 니치, 결과 기반 수익화, 바이브 코딩 타당성, 에이전틱 UX)을 최대한 충족해야 합니다.
+${contextIntro}${criteriaGuideLine}
 
 \`\`\`json
 {
