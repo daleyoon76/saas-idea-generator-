@@ -28,7 +28,7 @@ const features = [
       </svg>
     ),
     title: "다중 AI 모델 지원",
-    description: "Claude, Gemini, GPT-4o, Ollama(로컬 무료) 중 원하는 모델로 자유롭게 선택. 모델별 가용 상태를 실시간으로 표시합니다.",
+    description: "Claude, Gemini, GPT 중 원하는 모델로 자유롭게 선택. 모델별 가용 상태를 실시간으로 표시합니다.",
   },
   {
     icon: (
@@ -163,7 +163,7 @@ export default function Home() {
             }}
           >
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CANYON.amberLight }} />
-            Claude · Gemini · GPT-4o · Ollama 지원
+            Claude · Gemini · GPT 지원
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold leading-[1.15] tracking-tight mb-6" style={{ color: CANYON.cream }}>
@@ -297,16 +297,6 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
             </svg>
           </Link>
-          <p className="mt-6 text-xs" style={{ color: CANYON.textLight }}>
-            * Ollama는 로컬에서{" "}
-            <code
-              className="px-1.5 py-0.5 rounded font-mono"
-              style={{ background: CANYON.border, color: CANYON.deepRed }}
-            >
-              ollama serve
-            </code>{" "}
-            실행 필요
-          </p>
         </div>
       </section>
 
@@ -314,7 +304,7 @@ export default function Home() {
       <footer style={{ borderTop: `1px solid ${CANYON.border}` }} className="py-8">
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs" style={{ color: CANYON.textLight }}>
           <span>My CSO</span>
-          <span>Powered by Claude · Gemini · GPT-4o · Ollama</span>
+          <span>Powered by Claude · Gemini · GPT</span>
         </div>
       </footer>
     </div>
