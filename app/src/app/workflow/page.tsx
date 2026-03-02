@@ -2660,6 +2660,11 @@ function WorkflowPageInner() {
                 사업기획서 작성 ({selectedIdeas.length}개 선택)
               </button>
             </div>
+            {!session?.user && (
+              <p className="text-xs text-center mt-3" style={{ color: C.textLight }}>
+                <Link href="/login" style={{ color: C.accent }}>로그인</Link>하면 자동 저장됩니다
+              </p>
+            )}
           </div>
         )}
 
@@ -2825,6 +2830,11 @@ function WorkflowPageInner() {
                   <button type="button" onClick={() => saveFile(businessPlans[currentPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium transition" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
+              {!session?.user && (
+                <p className="text-xs text-center mt-3" style={{ color: C.textLight }}>
+                  <Link href="/login" style={{ color: C.accent }}>로그인</Link>하면 자동 저장됩니다
+                </p>
+              )}
               <div className="mt-4 flex flex-wrap justify-center gap-3">
                 <button onClick={() => generatePRD()} className="px-7 py-2.5 rounded-xl text-sm font-semibold transition" style={{ backgroundColor: C.textDark, color: C.cream }}>
                   개발문서(PRD) 생성하기
@@ -3152,6 +3162,11 @@ function WorkflowPageInner() {
                   <button type="button" onClick={() => saveFile(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
                 </div>
               </div>
+              {!session?.user && (
+                <p className="text-xs text-center mt-3" style={{ color: C.textLight }}>
+                  <Link href="/login" style={{ color: C.accent }}>로그인</Link>하면 자동 저장됩니다
+                </p>
+              )}
             </div>
           </div>
         )}
