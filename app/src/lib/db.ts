@@ -139,6 +139,33 @@ export async function deleteIdea(userId: string, ideaId: string) {
   return prisma.idea.delete({ where: { id: ideaId } });
 }
 
+/** 개별 기획서 삭제 */
+export async function deleteBusinessPlan(userId: string, planId: string) {
+  const plan = await prisma.businessPlan.findFirst({
+    where: { id: planId, userId },
+  });
+  if (!plan) return null;
+  return prisma.businessPlan.delete({ where: { id: planId } });
+}
+
+/** 개별 PRD 삭제 */
+export async function deletePRD(userId: string, prdId: string) {
+  const prd = await prisma.pRD.findFirst({
+    where: { id: prdId, userId },
+  });
+  if (!prd) return null;
+  return prisma.pRD.delete({ where: { id: prdId } });
+}
+
+/** 아이디어 이름 변경 */
+export async function updateIdeaName(userId: string, ideaId: string, name: string) {
+  const idea = await prisma.idea.findFirst({
+    where: { id: ideaId, userId },
+  });
+  if (!idea) return null;
+  return prisma.idea.update({ where: { id: ideaId }, data: { name } });
+}
+
 /** localId + keyword로 기존 DB 아이디어 찾기 */
 export async function findIdeaByLocalId(
   userId: string,

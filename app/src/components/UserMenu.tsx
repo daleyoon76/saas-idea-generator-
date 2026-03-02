@@ -98,6 +98,14 @@ export default function UserMenu() {
               {user.email}
             </p>
           </div>
+          <Link
+            href="/dashboard"
+            className="block px-3 py-2 text-sm transition hover:opacity-70"
+            style={{ color: C.textDark }}
+            onClick={() => setOpen(false)}
+          >
+            대시보드
+          </Link>
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
             className="w-full text-left px-3 py-2 text-sm transition hover:opacity-70"

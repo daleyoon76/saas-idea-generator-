@@ -37,114 +37,18 @@ function formatTime(seconds: number): string {
   return m > 0 ? `${m}분 ${s.toString().padStart(2, '0')}초` : `${s}초`;
 }
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, ImageRun, AlignmentType, ExternalHyperlink } from 'docx';
 import { Idea, BusinessPlan, PRD, WorkflowStep, AIProvider, PROVIDER_CONFIGS, QualityPreset, MODULE_PRESETS, PRESET_INFO, GuidedResult, GUIDED_RESULT_KEY, BusinessType, DevScale } from '@/lib/types';
 import { SearchResult } from '@/lib/prompts';
 import { CANYON, CANYON_DOCX } from '@/lib/colors';
 import { parseChartJson } from '@/lib/chart-schema';
 import { renderChartSvg } from '@/lib/chart-svg';
-import ChartRenderer from '@/components/ChartRenderer';
-import SourceLink from '@/components/SourceLink';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
+import { sanitizeMermaidSyntax } from '@/components/MermaidDiagram';
 import { useLinkChecker } from '@/lib/useLinkChecker';
 import { extractUrlsFromMarkdown, classifyUrl, buildSummary, type LinkStatus, type CredibilityTier } from '@/lib/source-credibility';
 import UserMenu from '@/components/UserMenu';
-
-/** Normalize common LLM Mermaid syntax variants so the parser can handle them. */
-function sanitizeMermaidSyntax(src: string, level: number = 0): string {
-  let result = src
-    // BOM 제거
-    .replace(/^\uFEFF/, '')
-    // box-drawing lines (─ ━ ═) + em/en dashes → standard --
-    .replace(/[─━═\u2500\u2501\u2550—–\u2014\u2013]{1,4}>/g, '-->')
-    // Unicode arrows → -->
-    .replace(/[→⟶⟹➜➝➞⟵⟷]/g, '-->')
-    // fullwidth >
-    .replace(/＞/g, '>')
-    // curly/smart quotes → straight quotes
-    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
-    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
-    // diagram type 선언 뒤 불필요한 세미콜론 제거 (flowchart TD; → flowchart TD)
-    .replace(/^(\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt)\b[^;\n]*);/gm, '$1')
-    // trailing 빈 줄 정리
-    .replace(/\n{3,}/g, '\n\n');
-
-  // 고아 end 제거: subgraph 없이 end만 있으면 파싱 에러 발생
-  const subgraphCount = (result.match(/^\s*subgraph\b/gm) || []).length;
-  const endCount = (result.match(/^\s*end\s*$/gm) || []).length;
-  if (endCount > subgraphCount) {
-    let surplus = endCount - subgraphCount;
-    result = result.replace(/^\s*end\s*$/gm, (m) => {
-      if (surplus > 0) { surplus--; return ''; }
-      return m;
-    });
-  }
-
-  // 리터럴 \n → <br/> (Mermaid 줄바꿈). 실제 개행(\n 문자)과 구별됨.
-  result = result.replace(/\\n/g, '<br/>');
-
-  // ── Level 0: [], {} 노드 라벨 및 subgraph 이름 내 () → 전각 괄호 ──
-  result = result.replace(/\[[^\]]*\]/g, (m) =>
-    m.replace(/\(/g, '（').replace(/\)/g, '）')
-  );
-  result = result.replace(/\{[^}]*\}/g, (m) =>
-    m.replace(/\(/g, '（').replace(/\)/g, '）')
-  );
-  result = result.replace(/^(\s*subgraph\s+)(.+)$/gm, (_, prefix, name) =>
-    prefix + name.replace(/\(/g, '（').replace(/\)/g, '）')
-  );
-
-  // ── Level 1: edge label |...| 및 ((...)) 이중괄호 노드 내부 () 치환 ──
-  if (level >= 1) {
-    // edge label |text with ()| → |text with （）|
-    result = result.replace(/\|[^|]*\|/g, (m) =>
-      m.replace(/\(/g, '（').replace(/\)/g, '）')
-    );
-    // ((...)) 이중괄호 노드: 외곽 (( )) 유지, 내부 () → （）
-    result = result.replace(/\(\(([^()]*(?:\([^)]*\))*[^()]*)\)\)/g, (match, inner: string) => {
-      return '((' + inner.replace(/\(/g, '（').replace(/\)/g, '）') + '))';
-    });
-  }
-
-  // ── Level 2: 모든 줄에서 () → （） 전역 치환 (핵 옵션) ──
-  if (level >= 2) {
-    const lines = result.split('\n');
-    result = lines.map(line => {
-      const trimmed = line.trim();
-      // 다이어그램 타입 선언, 주석, 빈 줄은 제외
-      if (!trimmed || trimmed.startsWith('%%') ||
-          /^\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt)\b/.test(trimmed)) {
-        return line;
-      }
-      return line.replace(/\(/g, '（').replace(/\)/g, '）');
-    }).join('\n');
-  }
-
-  // 긴 노드 라벨에 자동 줄바꿈 삽입 (각 줄이 13자 초과 시, 재귀)
-  const MAX_LINE = 13;
-  function breakLongSegment(seg: string): string {
-    seg = seg.trim();
-    if (seg.length <= MAX_LINE) return seg;
-    const mid = Math.floor(seg.length / 2);
-    let breakIdx = -1;
-    for (let d = 0; d <= mid; d++) {
-      if (mid + d < seg.length && /[\s,·:;→+]/.test(seg[mid + d])) { breakIdx = mid + d; break; }
-      if (mid - d >= 0 && /[\s,·:;→+]/.test(seg[mid - d])) { breakIdx = mid - d; break; }
-    }
-    if (breakIdx <= 0) return seg;
-    const left = seg.slice(0, breakIdx + 1).trimEnd();
-    const right = breakLongSegment(seg.slice(breakIdx + 1));
-    return left + '<br/>' + right;
-  }
-  result = result.replace(/(["[\]({])([^"|\]\)}\n]{10,}?)(["|\]\)}])/g, (_, open, body, close) => {
-    const segments = body.split('<br/>');
-    const broken = segments.map((s: string) => breakLongSegment(s.trim()));
-    return `${open}${broken.join('<br/>')}${close}`;
-  });
-
-  return result;
-}
+import type { SavedIdeaDetail } from '@/lib/types';
 
 /** SVG 문자열 → PNG (Uint8Array) 변환. docx 임베딩용 공용 함수. */
 async function svgToPng(svgString: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
@@ -230,83 +134,6 @@ async function renderMermaidToPng(chart: string): Promise<{ data: Uint8Array; wi
     return null;
   }
 }
-
-function MermaidDiagram({ chart }: { chart: string }) {
-  const mermaidRef = useRef<HTMLDivElement>(null);
-  const [svg, setSvg] = useState<string>('');
-  const [error, setError] = useState(false);
-  const [fit, setFit] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    import('mermaid').then(async (m) => {
-      m.default.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
-        themeVariables: {
-          primaryColor: '#F5EDE6', primaryBorderColor: '#D4A574',
-          lineColor: '#8B3520', textColor: '#3D1E10',
-      }});
-
-      // Level 0→1→2 순서로 sanitize 재시도
-      for (const level of [0, 1, 2]) {
-        if (cancelled) return;
-        const cleaned = sanitizeMermaidSyntax(chart, level);
-        const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
-        const offscreen = document.createElement('div');
-        offscreen.style.position = 'absolute';
-        offscreen.style.left = '-99999px';
-        offscreen.style.top = '-99999px';
-        offscreen.style.width = `${mermaidRef.current?.clientWidth || 800}px`;
-        document.body.appendChild(offscreen);
-        try {
-          const { svg: renderedSvg } = await m.default.render(id, cleaned, offscreen);
-          if (!cancelled) setSvg(renderedSvg);
-          return; // 성공 → 종료
-        } catch (err) {
-          if (level < 2) {
-            console.warn(`[Mermaid] level ${level} 실패, level ${level + 1} 시도:`, err);
-          } else {
-            if (!cancelled) { console.warn('[Mermaid] 모든 레벨 실패:', err, '\nInput:', chart); setError(true); }
-          }
-        } finally {
-          offscreen.remove();
-        }
-      }
-    });
-    return () => { cancelled = true; };
-  }, [chart]);
-
-  // SVG 렌더 후: 자연 폭 < 컨테이너 폭이면 확대(fit), 아니면 스크롤
-  useEffect(() => {
-    if (!svg || !mermaidRef.current) return;
-    const svgEl = mermaidRef.current.querySelector('svg');
-    if (!svgEl) return;
-    const svgWidth = svgEl.viewBox?.baseVal?.width || svgEl.getBoundingClientRect().width || 0;
-    const containerWidth = mermaidRef.current.clientWidth;
-    setFit(svgWidth <= containerWidth);
-  }, [svg]);
-
-  if (error) return (
-    <div className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm"
-      style={{ backgroundColor: CANYON.cream, borderColor: CANYON.amber, color: CANYON.textMid }}>
-      <p className="mb-0">다이어그램을 표시할 수 없습니다.</p>
-      <details className="mt-2">
-        <summary className="cursor-pointer text-xs" style={{ color: CANYON.textLight }}>
-          원본 다이어그램 코드 보기
-        </summary>
-        <pre className="mt-2 p-3 rounded-xl text-xs overflow-auto max-h-48 whitespace-pre-wrap"
-          style={{ backgroundColor: CANYON.bg, color: CANYON.textDark, fontFamily: 'var(--font-mono), monospace' }}>
-          {chart}
-        </pre>
-      </details>
-    </div>
-  );
-  return <div className={`my-4 overflow-x-auto mermaid-wrap${fit ? ' fit' : ''}`}
-    style={{ width: '100%' }}
-    ref={mermaidRef}
-    dangerouslySetInnerHTML={{ __html: svg }} />;
-}
-
 
 function WorkflowPageInner() {
   const searchParams = useSearchParams();
@@ -421,6 +248,75 @@ function WorkflowPageInner() {
       }
       routerNav.replace('/workflow', { scroll: false });
     }
+  }, [searchParams, routerNav]);
+
+  // 대시보드에서 다시 열기/재생성
+  useEffect(() => {
+    const ideaId = searchParams.get('ideaId');
+    const action = searchParams.get('action');
+    if (!ideaId || !action) return;
+
+    let cancelled = false;
+    async function restoreFromDb() {
+      try {
+        const res = await fetch(`/api/ideas/${ideaId}`);
+        if (!res.ok) return;
+        const detail: SavedIdeaDetail = await res.json();
+        if (cancelled) return;
+
+        // DB → 워크플로우 상태 변환
+        const restoredIdea: Idea = {
+          id: detail.localId,
+          name: detail.name,
+          category: detail.category,
+          oneLiner: detail.oneLiner,
+          target: detail.target,
+          problem: detail.problem,
+          features: detail.features,
+          differentiation: detail.differentiation,
+          revenueModel: detail.revenueModel,
+          mvpDifficulty: detail.mvpDifficulty,
+          rationale: detail.rationale,
+        };
+        setIdeas([restoredIdea]);
+        setSelectedIdeas([restoredIdea.id]);
+        setDbIdeaMap({ [restoredIdea.id]: detail.id });
+        if (detail.keyword) setKeyword(detail.keyword);
+        if (detail.preset) setSelectedPreset(detail.preset as QualityPreset);
+
+        // plans 복원 (version별 분리)
+        const drafts: BusinessPlan[] = detail.businessPlans
+          .filter(p => p.version === 'draft')
+          .map(p => ({ ideaId: detail.localId, ideaName: detail.name, content: p.content, createdAt: p.createdAt, version: 'draft' as const }));
+        const fulls: BusinessPlan[] = detail.businessPlans
+          .filter(p => p.version === 'full')
+          .map(p => ({ ideaId: detail.localId, ideaName: detail.name, content: p.content, createdAt: p.createdAt, version: 'full' as const }));
+        const prdList: PRD[] = detail.prds
+          .map(p => ({ ideaId: detail.localId, ideaName: detail.name, content: p.content, createdAt: p.createdAt }));
+
+        setBusinessPlans(drafts);
+        setFullBusinessPlans(fulls);
+        setPRDs(prdList);
+
+        if (action === 'regenerate') {
+          setStep('select-ideas');
+        } else if (fulls.length > 0) {
+          setCurrentFullPlanIndex(0);
+          setStep('view-full-plan');
+        } else if (drafts.length > 0) {
+          setCurrentPlanIndex(0);
+          setStep('view-plan');
+        } else {
+          setStep('select-ideas');
+        }
+
+        routerNav.replace('/workflow', { scroll: false });
+      } catch (e) {
+        console.error('Failed to restore from DB:', e);
+      }
+    }
+    restoreFromDb();
+    return () => { cancelled = true; };
   }, [searchParams, routerNav]);
 
   function startTimer(initialEtaMs: number) {
@@ -2769,58 +2665,16 @@ function WorkflowPageInner() {
                 </button>
               </div>
               <div className="mb-6" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', overflow: 'hidden' }}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h2: ({ children }) => (
-                      <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>
-                        {children}
-                      </div>
-                    ),
-                    h3: ({ children }) => (
-                      <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>
-                        {children}
-                      </div>
-                    ),
-                    h4: ({ children }) => (
-                      <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>
-                        {children}
-                      </div>
-                    ),
-                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
-                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
-                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
-                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
-                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
-                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
-                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
-                    tr: ({ children }) => <tr style={{ ['&:hover' as string]: { backgroundColor: C.selectedBg } }}>{children}</tr>,
-                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
-                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
-                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
-                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
-                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
-                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
-                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      const raw = String(children).replace(/\n$/, '');
-                      if (/language-chart/.test(className || ''))
-                        return <ChartRenderer json={raw} />;
-                      if (/language-mermaid/.test(className || ''))
-                        return <MermaidDiagram chart={raw} />;
-                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
-                    },
-                  }}
-                >
-                  {sanitizeMarkdown(businessPlans[currentPlanIndex].content)}
-                </ReactMarkdown>
+                <MarkdownRenderer content={sanitizeMarkdown(businessPlans[currentPlanIndex].content)} linkStatusMap={linkStatusMap} />
               </div>
 
               <SourceCredibilitySummary content={businessPlans[currentPlanIndex].content} />
 
               <div className="flex flex-wrap justify-between items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
-                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                <div className="flex gap-2">
+                  <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                  {session?.user && <Link href="/dashboard" className="px-5 py-2.5 rounded-xl text-sm transition inline-block" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>대시보드로</Link>}
+                </div>
                 <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                   위로
@@ -3003,40 +2857,7 @@ function WorkflowPageInner() {
               </div>
 
               <div className="mb-6" style={{ overflowWrap: 'break-word', wordBreak: 'break-word', overflow: 'hidden' }}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h2: ({ children }) => <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>{children}</div>,
-                    h3: ({ children }) => <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>{children}</div>,
-                    h4: ({ children }) => <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>{children}</div>,
-                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
-                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
-                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
-                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
-                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
-                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
-                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
-                    tr: ({ children }) => <tr>{children}</tr>,
-                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
-                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
-                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
-                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
-                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
-                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
-                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      const raw = String(children).replace(/\n$/, '');
-                      if (/language-chart/.test(className || ''))
-                        return <ChartRenderer json={raw} />;
-                      if (/language-mermaid/.test(className || ''))
-                        return <MermaidDiagram chart={raw} />;
-                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
-                    },
-                  }}
-                >
-                  {sanitizeMarkdown(fullBusinessPlans[currentFullPlanIndex].content)}
-                </ReactMarkdown>
+                <MarkdownRenderer content={sanitizeMarkdown(fullBusinessPlans[currentFullPlanIndex].content)} linkStatusMap={linkStatusMap} />
               </div>
 
               <SourceCredibilitySummary content={fullBusinessPlans[currentFullPlanIndex].content} />
@@ -3046,7 +2867,10 @@ function WorkflowPageInner() {
                 <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>위로
                 </button>
-                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                <div className="flex gap-2">
+                  <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm transition" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                  {session?.user && <Link href="/dashboard" className="px-5 py-2.5 rounded-xl text-sm transition inline-block" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>대시보드로</Link>}
+                </div>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => saveFile(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
                   <button type="button" onClick={() => saveFile(fullBusinessPlans[currentFullPlanIndex], 'bizplan', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
@@ -3117,35 +2941,7 @@ function WorkflowPageInner() {
                     {stripMarkdownForAI(prds[currentPRDIndex].content)}
                   </pre>
                 ) : (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                    h2: ({ children }) => <div className="px-4 py-2 rounded-lg font-bold text-base mt-8 mb-3" style={{ backgroundColor: C.textDark, color: C.cream }}>{children}</div>,
-                    h3: ({ children }) => <div className="px-4 py-2 font-semibold text-sm mt-5 mb-2 border-l-4" style={{ backgroundColor: C.selectedBg, color: C.accent, borderColor: C.accent }}>{children}</div>,
-                    h4: ({ children }) => <div className="pl-3 font-semibold text-sm mt-4 mb-1 border-l-4" style={{ borderColor: C.border, color: C.textMid }}>{children}</div>,
-                    p: ({ children }) => <p className="text-sm leading-7 my-2" style={{ color: C.textDark }}>{children}</p>,
-                    ul: ({ children }) => <ul className="ml-5 my-2 space-y-1 list-disc">{children}</ul>,
-                    ol: ({ children }) => <ol className="ml-5 my-2 space-y-1 list-decimal">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm leading-7" style={{ color: C.textDark }}>{children}</li>,
-                    strong: ({ children }) => <strong className="font-bold" style={{ color: C.textDark }}>{children}</strong>,
-                    table: ({ children }) => <div className="overflow-x-auto my-4"><table className="w-full border-collapse text-sm">{children}</table></div>,
-                    thead: ({ children }) => <thead style={{ backgroundColor: '#F0D5C0' }}>{children}</thead>,
-                    tbody: ({ children }) => <tbody className="divide-y" style={{ borderColor: C.border }}>{children}</tbody>,
-                    tr: ({ children }) => <tr>{children}</tr>,
-                    th: ({ children }) => <th className="px-3 py-2 text-left text-sm font-semibold" style={{ border: `1px solid ${C.border}`, color: C.textDark }}>{children}</th>,
-                    td: ({ children }) => <td className="px-3 py-2 text-sm leading-6" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>{children}</td>,
-                    a: ({ href, children }) => <SourceLink href={href} linkStatus={href ? linkStatusMap.get(href) : undefined}>{children}</SourceLink>,
-                    img: ({ src, alt }) => src ? <img src={src} alt={alt || ''} className="max-w-full h-auto my-2 rounded" /> : null,
-                    hr: () => <hr className="my-6" style={{ borderColor: C.border }} />,
-                    blockquote: ({ children }) => <blockquote className="my-4 px-4 py-3 rounded-lg border-l-4 text-sm" style={{ backgroundColor: '#FEF9E7', borderColor: '#F5901E', color: C.textDark }}>{children}</blockquote>,
-                    pre: ({ children }) => <pre className="whitespace-pre overflow-x-auto my-4 p-4 rounded-xl text-xs leading-5" style={{ backgroundColor: '#F5EDE6', color: C.textDark, fontFamily: 'var(--font-mono), monospace' }}>{children}</pre>,
-                    code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-                      const raw = String(children).replace(/\n$/, '');
-                      if (/language-chart/.test(className || ''))
-                        return <ChartRenderer json={raw} />;
-                      if (/language-mermaid/.test(className || ''))
-                        return <MermaidDiagram chart={raw} />;
-                      return <code style={{ fontFamily: 'var(--font-mono), monospace' }}>{children}</code>;
-                    },
-                  }}>{sanitizeMarkdown(prds[currentPRDIndex].content)}</ReactMarkdown>
+                  <MarkdownRenderer content={sanitizeMarkdown(prds[currentPRDIndex].content)} linkStatusMap={linkStatusMap} />
                 )}
               </div>
 
@@ -3156,7 +2952,10 @@ function WorkflowPageInner() {
                 <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>위로
                 </button>
-                <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                <div className="flex gap-2">
+                  <button onClick={reset} className="px-5 py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>새로 시작</button>
+                  {session?.user && <Link href="/dashboard" className="px-5 py-2.5 rounded-xl text-sm transition inline-block" style={{ border: `1px solid ${C.border}`, color: C.textMid }}>대시보드로</Link>}
+                </div>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => saveFile(prds[currentPRDIndex], 'prd', 'md')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ border: `1px solid ${C.border}`, color: C.textMid, backgroundColor: '#fff' }}>.md 저장</button>
                   <button type="button" onClick={() => saveFile(prds[currentPRDIndex], 'prd', 'docx')} className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: C.docxSave, color: '#fff' }}>.docx 저장</button>
